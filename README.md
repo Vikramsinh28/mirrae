@@ -724,3 +724,4 @@ The project includes several important configuration files:
 Make sure to copy `.env.example` to `.env` and fill in all the required values before running the application.
 # mirrae
 # mirrae
+# mirrae
