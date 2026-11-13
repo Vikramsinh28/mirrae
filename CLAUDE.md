@@ -1,6 +1,6 @@
 # Mirrae — Project Context for Claude Code
 
-Mirrae is a virtual try-on SaaS for e-commerce stores. Merchants (Shopify store owners) install it to add a "Try it on" button to product pages. A shopper uploads a photo; we send their photo + the product image to a hosted try-on model (fal.ai / FASHN); ~20–40s later we return a composite of the shopper "wearing" the item. Billing is usage-based: 1 try-on = 1 credit.
+Mirrae is a virtual try-on SaaS for e-commerce stores. Merchants (Shopify store owners) install it to add a "Try it on" button to product pages. A shopper uploads a photo; we send their photo + the product image to a hosted try-on model (Google Vertex AI `virtual-try-on-001`; switched from fal.ai on 2026-11-14 because the fal balance ran out); ~10–40s later we return a composite of the shopper "wearing" the item. Billing is usage-based: 1 try-on = 1 credit.
 
 Built on the Kostra Next.js SaaS boilerplate (MIT). Kostra supplies auth, Stripe + a credit system, S3/R2 uploads, and an admin/dashboard shell — reuse those, don't rebuild them.
 
@@ -45,26 +45,29 @@ Built on the Kostra Next.js SaaS boilerplate (MIT). Kostra supplies auth, Stripe
 
 Built and unit-tested. Files:
 
-- `src/services/external/tryon.ts` — the only provider-aware file. Uses fal's queue API (submit → poll `queue.fal.run`), 75s budget, cancels on timeout. Model id / field names / response shape verified against fal's page 2026-11-07. API key only ever sent to `queue.fal.run`.
-- `src/services/internal/tryon.ts` — job orchestration.
+- **Provider files (the only provider-aware ones, all in `src/services/external/`):** `tryon.ts` (Vertex AI `virtual-try-on-001`, synchronous `predict`, 75s budget, base64 in/out: `runTryOn({ personImageBase64, productImageBase64 }) → { image: { bytes, contentType } }`), `tryon-views.ts` (side/back views via Gemini image editing `gemini-2.5-flash-image`, location `global`; ~45s each, run in parallel) and `vertex-client.ts` (auth via `google-auth-library`: `GOOGLE_SERVICE_ACCOUNT_JSON`, `GOOGLE_APPLICATION_CREDENTIALS` or local `gcloud auth application-default login`; env `GOOGLE_CLOUD_PROJECT`, `VERTEX_LOCATION` default `us-central1`). Switched from fal.ai on 2026-11-14 (fal balance ran out). A third-party source says `virtual-try-on-001` is deprecated 2027-03-15 — re-check. Safety-filtered results come back without an image and fail the job (never charged).
+- `src/services/internal/tryon-image.ts` — `prepareTryOnImage`: every input photo is normalised with `sharp` before the provider sees it (EXIF rotate, flatten alpha, crop solid letterbox bars (max 25% per side), ≤2048px, JPEG). Vertex only accepts JPEG/PNG ≤10 MB, so WebP uploads work only because of this step.
+- `src/services/internal/tryon.ts` — job orchestration: download+prepare both photos → front view → (3-view jobs) side+back → charge.
 - `src/services/repositories/tryon-job/index.ts` — Prisma access.
 - `src/validations/tryon.ts` — Zod schemas.
-- `src/app/api/tryon/create/route.ts` (POST → 202 `{jobId}`, runs `processJob` via `after()`), `src/app/api/tryon/status/route.ts` (GET `?jobId=`).
+- `src/app/api/tryon/create/route.ts` (POST body `{ personImageKey, productImageKey, views?: 'single'|'multi', consent: true }` → 202 `{jobId}`, runs `processJob` via `after()`), `src/app/api/tryon/status/route.ts` (GET `?jobId=`).
 - `src/services/api/tryon.ts`, `src/hooks/useTryOn.ts` (create + poll every 2s).
-- `src/app/app/try/page.tsx` — demo surface.
+- `src/app/app/try/page.tsx` — demo surface (views picker, photo tips, `TryOnResultGallery` with front/side/back thumbnails that fill in while extras generate).
 
 Invariants — do not break these:
 
-- **Exactly-once charge:** deduction only runs after an atomic claim — `updateMany({ where: { id, status: 'DONE', chargedAt: null }, data: { chargedAt } })` succeeding on exactly one row. Never charge outside this claim.
+- **Exactly-once charge:** deduction only runs after an atomic claim — `updateMany({ where: { id, status: 'DONE', chargedAt: null, extrasSettledAt: { not: null } }, data: { chargedAt } })` succeeding on exactly one row. Never charge outside this claim.
+- **Credit rule (decided 2026-11-14):** `views: 'single'` = front only = 1 credit; `views: 'multi'` = front + side + back = 2 credits, checked up front (`hassufficientCredits(userId, 2)`). If an extra view fails the job is still delivered and charged only 1. The charge waits for `extrasSettledAt` (set immediately for single-view jobs, after both extras finish/fail for 3-view jobs), so the amount is known before the claim.
+- **Back views are invented** when the product photo shows only the front; the landing FAQ says so. Never claim they are exact.
 - **Consent required:** `TryOnJob.consentAt` is NOT NULL; `create` requires `consent: true` (exactly true). No job without consent.
-- **Privacy:** the shopper photo is deleted in a `finally` (so also on failure). An S3 lifecycle rule expires the `tryon/` prefix after 24h (applied; see "Storage (AWS S3)").
+- **Privacy:** the shopper photo is deleted in a `finally` (so also on failure) right after the front view, before the slow extra views start (they only need the front result). An S3 lifecycle rule expires the `tryon/` prefix after 24h (applied; see "Storage (AWS S3)").
 - **Stale handling:** jobs stuck in PROCESSING or QUEUED beyond the threshold are failed, never charged. `markJobDone` only moves PROCESSING→DONE.
 - Presigned GET URLs to the provider last 3600s (≫ 75s budget).
 - Known trade-off: a hard crash between "mark DONE" and "charge" loses one credit of revenue. Accepted; comment is in the code.
 
 ## Secrets
 
-- `.env` is gitignored (`.gitignore` line 31). Never commit `.env`; `FAL_KEY` and `POSTGRES_URL` live there. Placeholders are in `.env.example`.
+- `.env` is gitignored (`.gitignore` line 31). Never commit `.env`; the Google service-account key and `POSTGRES_URL` live there. Placeholders are in `.env.example`.
 - Git state (as of 2026-11-13): `git init` has been run and there are three "first commit" commits, but nearly all project files are still untracked. Check `git status` before the first real commit and confirm `.env` is not staged.
 
 ## Known debts (fix at the noted time)
@@ -73,7 +76,7 @@ Invariants — do not break these:
 - Add the production domain to the bucket CORS when deploying; set up a billing budget alert on the AWS account.
 - Route-handler tests: `src/test/api/tryon/tryon.test.ts` (mocked service, `SKIP_DB_SETUP=1` ok) and `tryon.integration.test.ts` (real Postgres; written but NOT yet run against a real `mirrae_test`, run it with `npx jest src/test/api/tryon/tryon.integration` once `TEST_POSTGRES_URL` is set). It refuses to run unless the DB name ends in `_test`.
 - `.env` `POSTGRES_URL` and `TEST_POSTGRES_URL` now point at the Docker `mirrae` / `mirrae_test` databases (fixed 2026-11-13; they used to point at `kostra` / nothing). Prisma migrations `20261107*_tryon_job*` may still have been applied to the old `kostra` database from earlier: check by hand, never from an agent session. `jest.setup.js` falls back to an unreachable URL instead of `kostra_test`.
-- Real-provider smoke test (spends one fal request, needs only `FAL_KEY`): `node --env-file=.env scripts/tryon-smoke.mjs <person-img> <garment-img> [out-file]`. Record latency/cost per try-on here once measured.
+- Real-provider smoke test (spends one Vertex request, needs `GOOGLE_CLOUD_PROJECT` + credentials; local JPEG/PNG files): `npx tsx --env-file=.env scripts/tryon-smoke.ts <person> <garment> [out-prefix] [--views]`. Measured 2026-11-14 (Vertex `virtual-try-on-001`): front view 13-17s; side+back together ~12s in parallel when not rate-limited (~45-90s each under Gemini 429 pressure; a new project's Gemini quota is low). Synthetic test set (3 casual user photos x 5 garment types, flat-lay/ghost/on-model/busy-background) all worked with Vertex; Gemini alone redrew the photo or ignored the garment, so it is only used for extra views. Cost per image not yet confirmed on the GCP billing page (a third-party source says ~$0.06). Known weakness: a person photo on a dark/studio backdrop plus a garment photo with a different background can blend the two (and copy watermark text like "Ndk" into the result); the UI tells users to use plain backgrounds and no watermarks.
 - `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is empty in `.env`, so the sign-in modal throws "Missing required parameter client_id" when opened. Set it (Google Cloud OAuth client) to test sign-in.
 - Replace the hero SVG illustration with real before/after try-on images; add an `opengraph-image` for link previews.
 - Unauthenticated storefront abuse / rate-limiting is a Stage 2 concern (see the `TODO Stage 2` note in `create`).
@@ -98,6 +101,6 @@ Mirrae-branded landing page lives in `src/components/mirrae/*` (copy in `src/dat
 ## Roadmap
 
 - **Stage 0 — Demo generator.** Done (standalone).
-- **Stage 1 — Try-on pipeline on one surface.** Built & unit-tested. Immediate task: verify end-to-end with a real `FAL_KEY`, run the full suite against `mirrae_test`, add the pending route tests.
+- **Stage 1 — Try-on pipeline on one surface.** Built & unit-tested. Immediate task: run the new DB-backed tests and an in-app 3-view try-on (Vertex creds work locally via ADC; the org policy blocks service-account keys, so production needs an attached service account / workload identity), run the full suite against `mirrae_test`, add the pending route tests.
 - **Stage 2 — Installable Shopify app (NEXT).** Theme app extension for one-toggle install; pull product images from the store; credit-metered "Try it on" widget on a live storefront; handle unauthenticated shopper traffic (rate-limiting/abuse); Shopify OAuth + webhooks.
 - **Stage 3 — Differentiators (later, only once merchants are paying).** AI shopping assistant (multilingual edge for India/UAE), size recommendation, "complete the look" upsell, return-rate analytics.

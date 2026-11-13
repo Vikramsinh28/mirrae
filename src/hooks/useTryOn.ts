@@ -59,8 +59,11 @@ export function useTryOnStatus(jobId: string | null) {
     enabled: !!jobId,
     refetchInterval: (query): number | false => {
       if (timedOut) return false;
-      const status = query.state.data?.status;
-      return status === 'done' || status === 'failed' ? false : POLL_INTERVAL_MS;
+      const data = query.state.data;
+      if (data?.status === 'failed') return false;
+      // A finished front view keeps polling until the side and back views have settled.
+      if (data?.status === 'done' && !data.extrasPending) return false;
+      return POLL_INTERVAL_MS;
     },
     gcTime: 0,
   });

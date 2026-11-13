@@ -5,10 +5,13 @@ import { useState } from 'react';
 
 import { PageHeaderWithAction } from '@/components/molecules/common/PageHeaderWithAction';
 import { TryOnImageField } from '@/components/molecules/tryon/TryOnImageField';
+import { TryOnResultGallery } from '@/components/molecules/tryon/TryOnResultGallery';
+import { TryOnViewsPicker } from '@/components/molecules/tryon/TryOnViewsPicker';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { useCreateTryOn, useTryOnStatus } from '@/hooks/useTryOn';
+import type { TryOnViewsOption } from '@/services/api/tryon';
 import { useAuthStore } from '@/store/auth';
 
 export default function TryOnPage() {
@@ -19,6 +22,7 @@ export default function TryOnPage() {
   const [productKey, setProductKey] = useState<string | null>(null);
   const [personPreview, setPersonPreview] = useState<string | null>(null);
   const [productPreview, setProductPreview] = useState<string | null>(null);
+  const [views, setViews] = useState<TryOnViewsOption>('multi');
   const [consent, setConsent] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -47,6 +51,7 @@ export default function TryOnPage() {
       const result = await createTryOn.mutateAsync({
         personImageKey: personKey,
         productImageKey: productKey,
+        views,
         consent: true,
       });
       setJobId(result.jobId);
@@ -77,13 +82,7 @@ export default function TryOnPage() {
       <div className="mx-auto w-full max-w-lg p-4 max-sm:p-3">
         {status?.status === 'done' ? (
           <div className="flex flex-col gap-4">
-            <div className="relative aspect-[3/4] w-full overflow-hidden rounded-md border border-border bg-muted/30">
-              <img
-                src={status.resultUrl}
-                alt="Try-on result"
-                className="absolute inset-0 size-full object-contain"
-              />
-            </div>
+            <TryOnResultGallery result={status} />
             <Button type="button" variant="secondary" onClick={handleReset} className="w-full">
               Try another
             </Button>
@@ -125,6 +124,13 @@ export default function TryOnPage() {
               />
             </div>
 
+            <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
+              <li>Your photo: standing straight, head to toe, facing the camera, plain background.</li>
+              <li>Product photo: the garment from the front, clean background, no watermark or text.</li>
+            </ul>
+
+            <TryOnViewsPicker value={views} onChange={setViews} disabled={isBusy} />
+
             <div className="flex items-start gap-2">
               <Checkbox
                 id="tryon-consent"
@@ -141,7 +147,7 @@ export default function TryOnPage() {
             {(isCreating || isPolling) && (
               <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                 <Loader2 className="size-4 shrink-0 animate-spin" />
-                {isCreating ? 'Starting try-on…' : 'Generating your look…'}
+                {isCreating ? 'Starting try-on…' : 'Generating your look… this can take up to a minute.'}
               </div>
             )}
 
@@ -173,7 +179,7 @@ export default function TryOnPage() {
                   Working…
                 </>
               ) : (
-                'Try on (1 credit)'
+                `Try on (${views === 'multi' ? '2 credits' : '1 credit'})`
               )}
             </Button>
           </form>

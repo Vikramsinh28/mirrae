@@ -29,7 +29,10 @@ export async function POST(request: NextRequest) {
     const result = await TryOnService.createJob({ userId: user.id, ...parsed.data });
     if (!result.ok) {
       if (result.reason === 'INSUFFICIENT_CREDITS') {
-        return insufficientCreditsResponse('You need at least 1 credit to run a try-on.');
+        const needed = parsed.data.views === 'multi' ? 2 : 1;
+        return insufficientCreditsResponse(
+          `You need at least ${needed} credit${needed === 1 ? '' : 's'} to run this try-on.`
+        );
       }
       return badRequestResponse(
         result.reason === 'CONSENT_REQUIRED'

@@ -1,6 +1,6 @@
 /**
  * Database-backed try-on tests. Real routes, service, repository and credit service run against
- * a real Postgres; only the edges are mocked (auth cookie, object storage, fal.ai, image download).
+ * a real Postgres; only the edges are mocked (auth cookie, object storage, the try-on provider).
  *
  * Run by a human against mirrae_test:  npx jest src/test/api/tryon/tryon.integration
  * Refuses to run unless the database name ends in _test, because cleanupDatabase() deletes rows.
@@ -10,6 +10,7 @@ import { NextRequest, after } from 'next/server';
 import { getAuthUser } from '@/lib/auth/jwt';
 import { deleteObject, generateDownloadUrl, objectExists, putObject } from '@/services/external/aws/s3';
 import { runTryOn } from '@/services/external/tryon';
+import { generateExtraView } from '@/services/external/tryon-views';
 import { TryOnService } from '@/services/internal/tryon';
 import * as tryOnRepo from '@/services/repositories/tryon-job';
 import { cleanupDatabase, createTestUser, disconnectTestDatabase, testPrisma } from '../../setup';
@@ -25,6 +26,11 @@ jest.mock('@/services/external/tryon', () => ({
   runTryOn: jest.fn(),
   TryOnProviderError: class extends Error {},
 }));
+jest.mock('@/services/external/tryon-views', () => ({ generateExtraView: jest.fn() }));
+jest.mock('@/services/internal/tryon-image', () => ({
+  prepareTryOnImage: jest.fn().mockResolvedValue({ base64: 'PREPARED', contentType: 'image/jpeg' }),
+  TryOnImageError: class extends Error {},
+}));
 jest.mock('@/services/internal/files/file-upload/file-upload-config', () => ({
   getBucketName: () => 'private-bucket',
 }));
@@ -34,6 +40,7 @@ const authMock = getAuthUser as jest.MockedFunction<typeof getAuthUser>;
 const afterMock = after as jest.MockedFunction<typeof after>;
 const providerMock = runTryOn as jest.MockedFunction<typeof runTryOn>;
 const deleteObjectMock = deleteObject as jest.MockedFunction<typeof deleteObject>;
+const extraViewMock = generateExtraView as jest.MockedFunction<typeof generateExtraView>;
 
 const STALE_AGE_MS = 10 * 60 * 1000;
 const RESULT_KEY = 'tryon/result/u/1/result.png';
@@ -79,9 +86,9 @@ async function getStatus(jobId: string) {
 }
 
 /** Creates a job through the real create route and returns its id. */
-async function createJobVia(user: TestUser): Promise<string> {
+async function createJobVia(user: TestUser, overrides: Record<string, unknown> = {}): Promise<string> {
   signInAs(user);
-  const response = await postCreate(user);
+  const response = await postCreate(user, overrides);
   expect(response.status).toBe(202);
   return (await response.json()).data.jobId;
 }
@@ -104,9 +111,11 @@ describe('Try-on API against a real database', () => {
     (generateDownloadUrl as jest.Mock).mockResolvedValue({ downloadUrl: 'https://signed.example/img' });
     (putObject as jest.Mock).mockResolvedValue({ key: RESULT_KEY });
     deleteObjectMock.mockResolvedValue(undefined as never);
-    providerMock.mockResolvedValue({ resultUrl: 'https://fal.example/result.png' });
-    global.fetch = jest.fn().mockResolvedValue(
-      new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/png' } })
+    providerMock.mockResolvedValue({ image: { bytes: new Uint8Array([1, 2, 3]), contentType: 'image/png' } });
+    extraViewMock.mockResolvedValue({ bytes: new Uint8Array([4, 5, 6]), contentType: 'image/png' });
+    // A fresh Response per call: a body can be read only once.
+    global.fetch = jest.fn().mockImplementation(
+      async () => new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/jpeg' } })
     );
   });
 
@@ -187,7 +196,7 @@ describe('Try-on API against a real database', () => {
     });
 
     const status = await TryOnService.getStatus(jobId, user.id);
-    const revived = await tryOnRepo.markJobDone(jobId, RESULT_KEY);
+    const revived = await tryOnRepo.markJobDone(jobId, RESULT_KEY, true);
 
     expect(status).toMatchObject({ status: 'failed' });
     expect(revived).toBe(false);
@@ -239,5 +248,60 @@ describe('Try-on API against a real database', () => {
     });
 
     await expect(insertWithoutConsent).rejects.toThrow();
+  });
+  test('a 3-view try-on stores side and back, settles, and charges exactly 2 credits', async () => {
+    const user = await createTestUser({ credits: 5 });
+    const jobId = await createJobVia(user, { views: 'multi' });
+
+    await TryOnService.processJob(jobId);
+
+    const job = await testPrisma.tryOnJob.findUniqueOrThrow({ where: { id: jobId } });
+    const history = await testPrisma.creditHistory.findMany({ where: { userId: user.id } });
+    expect(job).toMatchObject({ status: 'DONE', viewCount: 3 });
+    expect(job.sideImageKey).toBe(RESULT_KEY);
+    expect(job.backImageKey).toBe(RESULT_KEY);
+    expect(job.extrasSettledAt).not.toBeNull();
+    expect(await creditsOf(user.id)).toBe(3);
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({ operation: 'TRYON', objectId: jobId, amount: -2, balanceAfter: 3 });
+  });
+
+  test('a 3-view try-on whose back view fails is delivered and charged only 1 credit', async () => {
+    const user = await createTestUser({ credits: 5 });
+    const jobId = await createJobVia(user, { views: 'multi' });
+    extraViewMock.mockImplementation(async ({ view }) => {
+      if (view === 'back') throw new Error('rate limited');
+      return { bytes: new Uint8Array([4]), contentType: 'image/png' };
+    });
+
+    await TryOnService.processJob(jobId);
+
+    const job = await testPrisma.tryOnJob.findUniqueOrThrow({ where: { id: jobId } });
+    expect(job).toMatchObject({ status: 'DONE', backImageKey: null });
+    expect(job.sideImageKey).toBe(RESULT_KEY);
+    expect(await creditsOf(user.id)).toBe(4);
+  });
+
+  test('the charge cannot be claimed until the extra views are settled, then exactly once', async () => {
+    const user = await createTestUser({ credits: 5 });
+    const jobId = await createJobVia(user, { views: 'multi' });
+    await testPrisma.tryOnJob.update({ where: { id: jobId }, data: { status: 'DONE' } });
+
+    const early = await tryOnRepo.claimJobCharge(jobId);
+    await tryOnRepo.settleExtras(jobId);
+    const claims = await Promise.all(Array.from({ length: 6 }, () => tryOnRepo.claimJobCharge(jobId)));
+
+    expect(early).toBe(false);
+    expect(claims.filter(Boolean)).toHaveLength(1);
+  });
+
+  test('a 3-view create is refused with 402 when the user has only 1 credit', async () => {
+    const user = await createTestUser({ credits: 1 });
+    signInAs(user);
+
+    const response = await postCreate(user, { views: 'multi' });
+
+    expect(response.status).toBe(402);
+    expect(await testPrisma.tryOnJob.count()).toBe(0);
   });
 });

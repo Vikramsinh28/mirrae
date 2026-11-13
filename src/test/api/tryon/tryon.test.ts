@@ -94,6 +94,7 @@ describe('Try-on API routes', () => {
       userId: user.id,
       personImageKey: `tryon/person/u/${user.id}/person.jpg`,
       productImageKey: `tryon/product/u/${user.id}/product.jpg`,
+      views: 'single',
       consent: true,
     });
   });
@@ -204,6 +205,32 @@ describe('Try-on API routes', () => {
       expect(afterMock).not.toHaveBeenCalled();
     });
 
+    test('passes views "multi" through to the service', async () => {
+      createJob.mockResolvedValue({ ok: true, jobId });
+
+      const response = await post({ ...validBody, views: 'multi' });
+
+      expect(response.status).toBe(202);
+      expect(createJob).toHaveBeenCalledWith(expect.objectContaining({ views: 'multi' }));
+    });
+
+    test('rejects an unknown views value with 400', async () => {
+      const response = await post({ ...validBody, views: 'ten' });
+
+      expect(response.status).toBe(400);
+      expect(createJob).not.toHaveBeenCalled();
+    });
+
+    test('the 402 message says 2 credits for a 3-view try-on and 1 for a single view', async () => {
+      createJob.mockResolvedValue({ ok: false, reason: 'INSUFFICIENT_CREDITS' });
+
+      const multi = await (await post({ ...validBody, views: 'multi' })).json();
+      const single = await (await post(validBody)).json();
+
+      expect(JSON.stringify(multi)).toContain('at least 2 credits');
+      expect(JSON.stringify(single)).toContain('at least 1 credit ');
+    });
+
     test.each(['INVALID_KEY', 'CONSENT_REQUIRED'] as const)(
       'returns 400 and schedules nothing when the service reports %s',
       async reason => {
@@ -237,7 +264,12 @@ describe('Try-on API routes', () => {
     };
 
     test('returns the status of the signed-in user\'s job', async () => {
-      getStatus.mockResolvedValue({ status: 'done', resultUrl: 'https://cdn.example.com/r.png' });
+      getStatus.mockResolvedValue({
+        status: 'done',
+        resultUrl: 'https://cdn.example.com/r.png',
+        viewCount: 1,
+        extrasPending: false,
+      });
 
       const response = await get(`?jobId=${jobId}`);
       const json = await response.json();

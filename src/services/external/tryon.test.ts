@@ -1,99 +1,108 @@
 import { runTryOn, TryOnProviderError } from './tryon';
 
-const input = {
-  personImageUrl: 'https://s3.example/person.jpg',
-  productImageUrl: 'https://s3.example/product.jpg',
-};
-const fast = { pollIntervalMs: 1, timeoutMs: 50 };
+const getAccessToken = jest.fn();
+jest.mock('google-auth-library', () => ({
+  GoogleAuth: jest.fn().mockImplementation(() => ({ getAccessToken })),
+}));
 
-const Q = 'https://queue.fal.run/fal-ai/fashn/tryon/v1.6/requests/req-1';
-const submitBody = {
-  request_id: 'req-1',
-  status_url: `${Q}/status`,
-  response_url: Q,
-  cancel_url: `${Q}/cancel`,
-};
+const input = { personImageBase64: 'UEVSU09O', productImageBase64: 'R0FSTUVOVA==' };
+const RESULT_B64 = Buffer.from([9, 8, 7]).toString('base64');
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+const prediction = () => json({ predictions: [{ bytesBase64Encoded: RESULT_B64, mimeType: 'image/png' }] });
 
-describe('runTryOn', () => {
-  const originalKey = process.env.FAL_KEY;
+const ENV_KEYS = ['GOOGLE_CLOUD_PROJECT', 'VERTEX_LOCATION'] as const;
+
+describe('runTryOn (Vertex AI virtual-try-on-001)', () => {
+  const originalEnv = Object.fromEntries(ENV_KEYS.map(key => [key, process.env[key]]));
   let fetchSpy: jest.SpyInstance;
 
   beforeEach(() => {
-    process.env.FAL_KEY = 'test-key';
+    process.env.GOOGLE_CLOUD_PROJECT = 'test-project';
+    delete process.env.VERTEX_LOCATION;
+    getAccessToken.mockResolvedValue('test-token');
     fetchSpy = jest.spyOn(global, 'fetch');
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
-    fetchSpy.mockRestore();
-    process.env.FAL_KEY = originalKey;
-  });
-
-  test('submits, polls until completed and returns the result url', async () => {
-    fetchSpy
-      .mockResolvedValueOnce(json(submitBody))
-      .mockResolvedValueOnce(json({ status: 'IN_QUEUE' }))
-      .mockResolvedValueOnce(json({ status: 'IN_PROGRESS' }))
-      .mockResolvedValueOnce(json({ status: 'COMPLETED' }))
-      .mockResolvedValueOnce(json({ images: [{ url: 'https://cdn.fashn.ai/out.png' }] }));
-
-    const result = await runTryOn(input, fast);
-
-    expect(result).toEqual({ resultUrl: 'https://cdn.fashn.ai/out.png' });
-    const [submitUrl, init] = fetchSpy.mock.calls[0];
-    expect(submitUrl).toBe('https://queue.fal.run/fal-ai/fashn/tryon/v1.6');
-    expect(init.headers.Authorization).toBe('Key test-key');
-    expect(JSON.parse(init.body)).toMatchObject({
-      model_image: input.personImageUrl,
-      garment_image: input.productImageUrl,
+    jest.restoreAllMocks();
+    getAccessToken.mockReset();
+    ENV_KEYS.forEach(key => {
+      if (originalEnv[key] === undefined) delete process.env[key];
+      else process.env[key] = originalEnv[key];
     });
   });
 
-  test('throws when FAL_KEY is missing', async () => {
-    delete process.env.FAL_KEY;
-    await expect(runTryOn(input, fast)).rejects.toThrow('FAL_KEY is required');
+  test('posts both images to the predict endpoint and returns the result bytes', async () => {
+    fetchSpy.mockResolvedValue(prediction());
+
+    const result = await runTryOn(input);
+
+    expect(result.image.contentType).toBe('image/png');
+    expect(Array.from(result.image.bytes)).toEqual([9, 8, 7]);
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(url).toBe(
+      'https://us-central1-aiplatform.googleapis.com/v1/projects/test-project/locations/us-central1' +
+        '/publishers/google/models/virtual-try-on-001:predict'
+    );
+    expect(init.headers.Authorization).toBe('Bearer test-token');
+    const body = JSON.parse(init.body);
+    expect(body.instances[0].personImage.image.bytesBase64Encoded).toBe(input.personImageBase64);
+    expect(body.instances[0].productImages[0].image.bytesBase64Encoded).toBe(input.productImageBase64);
+    expect(body.parameters).toEqual({ sampleCount: 1 });
+  });
+
+  test('uses VERTEX_LOCATION and the global host when asked', async () => {
+    process.env.VERTEX_LOCATION = 'global';
+    fetchSpy.mockResolvedValue(prediction());
+
+    await runTryOn(input);
+
+    expect(fetchSpy.mock.calls[0][0]).toContain(
+      'https://aiplatform.googleapis.com/v1/projects/test-project/locations/global/'
+    );
+  });
+
+  test('throws when GOOGLE_CLOUD_PROJECT is missing, before any network call', async () => {
+    delete process.env.GOOGLE_CLOUD_PROJECT;
+    await expect(runTryOn(input)).rejects.toThrow('GOOGLE_CLOUD_PROJECT is required');
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  test('throws TryOnProviderError on a non-2xx submit without leaking the body', async () => {
-    fetchSpy.mockResolvedValue(json({ detail: 'secret internals' }, 500));
+  test('throws TryOnProviderError when no access token can be obtained', async () => {
+    getAccessToken.mockRejectedValue(new Error('no credentials'));
+    await expect(runTryOn(input)).rejects.toThrow(/authentication failed/i);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 
-    const error = await runTryOn(input, fast).catch(e => e);
+  test('throws TryOnProviderError on a non-2xx response without leaking the body', async () => {
+    fetchSpy.mockResolvedValue(json({ error: { message: 'secret internals' } }, 403));
+
+    const error = await runTryOn(input).catch(e => e);
 
     expect(error).toBeInstanceOf(TryOnProviderError);
+    expect(error.message).toBe('Try-on provider returned 403');
     expect(error.message).not.toContain('secret internals');
   });
 
-  test('refuses to send the key to a non-fal status url', async () => {
-    fetchSpy.mockResolvedValueOnce(json({ ...submitBody, status_url: 'https://evil.example/s' }));
+  test('throws when the response has no usable prediction (for example a safety-filtered result)', async () => {
+    fetchSpy.mockResolvedValueOnce(json({ predictions: [{ raiFilteredReason: 'blocked' }] }));
+    await expect(runTryOn(input)).rejects.toBeInstanceOf(TryOnProviderError);
 
-    await expect(runTryOn(input, fast)).rejects.toThrow(/unexpected URL/i);
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    fetchSpy.mockResolvedValueOnce(json({}));
+    await expect(runTryOn(input)).rejects.toBeInstanceOf(TryOnProviderError);
   });
 
-  test('times out, cancels the request and throws', async () => {
-    fetchSpy.mockImplementation(async (_url: string, init?: RequestInit) =>
-      init?.method === 'POST' ? json(submitBody) : json({ status: 'IN_PROGRESS' })
-    );
-
-    await expect(runTryOn(input, fast)).rejects.toThrow(/timed out/i);
-    const cancelCall = fetchSpy.mock.calls.find(([, init]) => init?.method === 'PUT');
-    expect(cancelCall?.[0]).toBe(`${Q}/cancel`);
-  });
-
-  test('throws when the result has no image', async () => {
-    fetchSpy
-      .mockResolvedValueOnce(json(submitBody))
-      .mockResolvedValueOnce(json({ status: 'COMPLETED' }))
-      .mockResolvedValueOnce(json({ images: [] }));
-
-    await expect(runTryOn(input, fast)).rejects.toBeInstanceOf(TryOnProviderError);
-  });
-
-  test('maps a network abort to a timeout error', async () => {
+  test('maps a network timeout to a timeout error', async () => {
     fetchSpy.mockRejectedValue(Object.assign(new Error('aborted'), { name: 'TimeoutError' }));
-    await expect(runTryOn(input, fast)).rejects.toThrow(/timed out/i);
+    await expect(runTryOn(input)).rejects.toThrow(/timed out/i);
+  });
+
+  test('maps any other network failure to a generic request error', async () => {
+    fetchSpy.mockRejectedValue(new Error('ECONNRESET'));
+    await expect(runTryOn(input)).rejects.toThrow('Try-on provider request failed');
   });
 });

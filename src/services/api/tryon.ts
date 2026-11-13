@@ -1,13 +1,28 @@
 import { axios } from '@/lib/utils';
 
+/** 'single' = front view (1 credit); 'multi' = front + side + back (2 credits). */
+export type TryOnViewsOption = 'single' | 'multi';
+
+export interface TryOnDoneResponse {
+  status: 'done';
+  /** Front view. */
+  resultUrl: string;
+  sideUrl?: string;
+  backUrl?: string;
+  viewCount: number;
+  /** True while the side and back views are still being generated. */
+  extrasPending: boolean;
+}
+
 export type TryOnStatusResponse =
   | { status: 'queued' | 'processing' }
-  | { status: 'done'; resultUrl: string }
+  | TryOnDoneResponse
   | { status: 'failed'; error: string };
 
 export interface CreateTryOnParams {
   personImageKey: string;
   productImageKey: string;
+  views?: TryOnViewsOption;
   consent: true;
 }
 

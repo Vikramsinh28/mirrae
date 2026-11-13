@@ -1,65 +1,68 @@
 /**
- * Real-provider smoke test for the try-on pipeline. Spends one fal.ai request.
+ * Real-provider smoke test for the try-on pipeline. Spends one Vertex AI request
+ * (plus two Gemini image requests with --views).
  *
- *   node --env-file=.env scripts/tryon-smoke.mjs <person-image> <garment-image> [out-file]
+ *   npx tsx --env-file=.env scripts/tryon-smoke.ts <person-image> <garment-image> [out-prefix] [--views]
  *
- * Each image is a local file path or an https URL. Local files are sent to fal.ai as data URIs.
- * Runs only the provider module (src/services/external/tryon.ts): no database, no storage,
- * no credits. Prints elapsed time so latency and cost per try-on can be recorded.
+ * Each image is a local JPEG, PNG or WebP file. It is normalised exactly like the app does
+ * (orientation, letterbox bars, size, JPEG) before being sent. Writes <out-prefix>.png, and with
+ * --views also <out-prefix>-side.png and <out-prefix>-back.png.
+ * Runs only the provider modules: no database, no storage, no credits. Prints elapsed time.
+ * Needs GOOGLE_CLOUD_PROJECT and Google credentials (see src/services/external/vertex-client.ts).
  */
 import { readFile, writeFile } from 'node:fs/promises';
-import { extname } from 'node:path';
 
-import { runTryOn } from '../src/services/external/tryon.ts';
+import { runTryOn } from '../src/services/external/tryon';
+import { generateExtraView } from '../src/services/external/tryon-views';
+import { prepareTryOnImage } from '../src/services/internal/tryon-image';
 
-const MAX_LOCAL_BYTES = 8 * 1024 * 1024;
-const MIME_BY_EXTENSION = {
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-  '.webp': 'image/webp',
-};
+const EXTRA_VIEWS = ['side', 'back'] as const;
 
-async function toImageInput(source) {
-  if (source.startsWith('https://')) return source;
+const secondsSince = (startedAt: number) => ((Date.now() - startedAt) / 1000).toFixed(1);
 
-  const mime = MIME_BY_EXTENSION[extname(source).toLowerCase()];
-  if (!mime) throw new Error(`Unsupported image type for "${source}" (use jpg, png or webp)`);
-
-  const bytes = await readFile(source);
-  if (bytes.byteLength > MAX_LOCAL_BYTES) {
-    throw new Error(`"${source}" is over 8 MB; resize it or pass an https URL instead`);
-  }
-  return `data:${mime};base64,${bytes.toString('base64')}`;
-}
-
-async function main() {
-  const [personSource, garmentSource, outFile] = process.argv.slice(2);
-  if (!personSource || !garmentSource) {
-    console.error('Usage: node --env-file=.env scripts/tryon-smoke.mjs <person> <garment> [out-file]');
+async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+  const withViews = args.includes('--views');
+  const [personPath, garmentPath, outPrefix = 'tryon-result'] = args.filter(arg => arg !== '--views');
+  if (!personPath || !garmentPath) {
+    console.error('Usage: npx tsx --env-file=.env scripts/tryon-smoke.ts <person> <garment> [out-prefix] [--views]');
     process.exit(2);
   }
-  if (!process.env.FAL_KEY) {
-    console.error('FAL_KEY is not set in .env');
+  if (!process.env.GOOGLE_CLOUD_PROJECT) {
+    console.error('GOOGLE_CLOUD_PROJECT is not set in .env');
     process.exit(2);
   }
 
-  const personImageUrl = await toImageInput(personSource);
-  const productImageUrl = await toImageInput(garmentSource);
+  const person = await prepareTryOnImage(await readFile(personPath));
+  const garment = await prepareTryOnImage(await readFile(garmentPath));
 
-  console.log('Sending both images to fal.ai (one billable request)...');
-  const startedAt = Date.now();
-  const { resultUrl } = await runTryOn({ personImageUrl, productImageUrl });
-  const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+  console.log('Sending both images to Vertex AI (one billable request)...');
+  const frontStartedAt = Date.now();
+  const { image } = await runTryOn({ personImageBase64: person.base64, productImageBase64: garment.base64 });
+  await writeFile(`${outPrefix}.png`, image.bytes);
+  console.log(`Front view done in ${secondsSince(frontStartedAt)}s -> ${outPrefix}.png`);
 
-  console.log(`Done in ${seconds}s`);
-  console.log(`Result: ${resultUrl}`);
+  if (!withViews) return;
 
-  if (outFile) {
-    const response = await fetch(resultUrl);
-    await writeFile(outFile, Buffer.from(await response.arrayBuffer()));
-    console.log(`Saved to ${outFile}`);
-  }
+  console.log('Generating side and back views (two billable Gemini requests)...');
+  const viewsStartedAt = Date.now();
+  await Promise.all(
+    EXTRA_VIEWS.map(async view => {
+      try {
+        const extra = await generateExtraView({
+          view,
+          frontImage: image,
+          garmentBase64: garment.base64,
+          garmentContentType: garment.contentType,
+        });
+        await writeFile(`${outPrefix}-${view}.png`, extra.bytes);
+        console.log(`${view} view done -> ${outPrefix}-${view}.png`);
+      } catch (error) {
+        console.error(`${view} view failed:`, error instanceof Error ? error.message : error);
+      }
+    })
+  );
+  console.log(`Extra views took ${secondsSince(viewsStartedAt)}s`);
 }
 
 main().catch(error => {

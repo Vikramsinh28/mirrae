@@ -133,11 +133,15 @@ model TryOnJob {
   userId          Int
   personImageKey  String // Shopper photo; deleted after the result is saved
   productImageKey String
-  resultImageKey  String? // Result stored in the private bucket
+  resultImageKey  String? // Front view, stored in the private bucket
+  viewCount       Int         @default(1) // 1 = front only (1 credit), 3 = front + side + back (2 credits)
+  sideImageKey    String?
+  backImageKey    String?
+  extrasSettledAt DateTime? // Set once no extra view is still being generated; the charge waits for it
   status          TryOnStatus @default(QUEUED)
   error           String?
   consentAt       DateTime // Shopper consent to process the photo
-  chargedAt       DateTime? // Set once when the 1 credit is deducted
+  chargedAt       DateTime? // Set once when the credits for this job are deducted
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   expiresAt       DateTime
