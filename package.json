@@ -28,7 +28,7 @@
     "test": "jest --verbose --no-coverage",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:local": "POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:5433/kostra_test?schema=public TEST_APP_URL=http://localhost:3001 NODE_ENV=test npm run test",
+    "test:local": "POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:5433/mirrae_test?schema=public TEST_APP_URL=http://localhost:3001 NODE_ENV=test npm run test",
     "verify-sitemap": "echo '✅ Checking sitemap generation...' && ls -la .next/server/app/sitemap.xml* && echo '✅ Sitemap generated successfully!' || echo '❌ Sitemap generation failed!'",
     "deploy": "bash deploy.sh",
     "release": "tsx release.js",
