@@ -1,7 +1,5 @@
 'use client';
 
-import { useTheme } from 'next-themes';
-import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useState } from 'react';
@@ -13,6 +11,7 @@ import { useAuthStore } from '@/store/auth';
 
 
 import { CreditDisplay } from '@/components/atom/CreditDisplay';
+import { MirraeMark } from '@/components/mirrae/mirrae-mark';
 import GradientCtaButton from '@/components/molecules/common/GradientCtaButton';
 import { Card, CardContent as UICardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -25,7 +24,6 @@ import { UserProfileDropdown } from './UserProfileDropdown';
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { theme, resolvedTheme } = useTheme();
   const openCreditPurchase = useUiModalsStore(state => state.openCreditPurchase);
   const handleOpenPurchase = useCallback(() => openCreditPurchase(), [openCreditPurchase]);
   const userPlan = useAuthStore(state => state.user?.plan);
@@ -44,9 +42,6 @@ export function Sidebar() {
     // For other routes, check if pathname matches or starts with the url
     return pathname === itemUrl || pathname.startsWith(itemUrl);
   };
-
-  const currentTheme = resolvedTheme || theme;
-  const logoSrc = currentTheme === 'dark' ? '/logos/light-logo.png' : '/logos/dark-logo.png';
 
   const teams = [
     {
@@ -76,13 +71,9 @@ export function Sidebar() {
                   size="lg"
                   className="data-open:bg-sidebar-accent data-open:text-sidebar-accent-foreground data-[size='lg']:group-data-[collapsible=icon]:p-0!"
                 >
-                  <Image
-                    src={logoSrc}
-                    alt="KostraLogo"
-                    width={32}
-                    height={32}
-                    className="size-8 shrink-0"
-                  />
+                  <span className="flex size-8 shrink-0 items-center justify-center">
+                    <MirraeMark withWordmark={false} />
+                  </span>
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-medium">
                       {activeTeam.name}

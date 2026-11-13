@@ -6,7 +6,7 @@ import { EmailSignUpForm } from '@/components/molecules/form/EmailSignUpForm';
 import { ForgotPasswordForm } from '@/components/molecules/form/ForgotPasswordForm';
 import { OTPVerificationForm } from '@/components/molecules/form/OTPVerificationForm';
 import { ResetPasswordForm } from '@/components/molecules/form/ResetPasswordForm';
-import Image from 'next/image';
+import { MirraeMark } from '@/components/mirrae/mirrae-mark';
 import { useCallback, useEffect, useState } from 'react';
 import { GoogleSignInButton } from './common/GoogleSignInButton';
 
@@ -99,23 +99,17 @@ function SignInModal({ isOpen, onClose }: SignInModalProps) {
         <div className="p-8">
           <div className="mb-8 text-center">
             <div className="mb-4 flex justify-center">
-              <Image
-                src="/logos/dark-logo.png"
-                alt="Kostra Logo"
-                width={52}
-                height={52}
-                className="drop-shadow-xs"
-              />
+              <MirraeMark className="text-white" />
             </div>
             <h1 id="modal-title" className="mb-2 text-2xl font-bold text-gray-100">
-              {authMode === 'signin' && 'Welcome to Kostra'}
+              {authMode === 'signin' && 'Welcome to Mirrae'}
               {authMode === 'signup' && 'Sign Up'}
               {authMode === 'otp-verification' && 'Verify Your Email'}
               {authMode === 'forgot-password' && 'Reset Password'}
               {authMode === 'reset-password' && 'Enter New Password'}
             </h1>
             <p className="text-center text-xs text-gray-400">
-              {authMode === 'signin' && 'Join thousands of teams already using Kostra'}
+              {authMode === 'signin' && 'Sign in to run your first try-on'}
               {authMode === 'signup' && 'Start your journey with us'}
               {authMode === 'otp-verification' && 'Complete your account setup'}
               {authMode === 'forgot-password' && 'Enter your email to receive a reset code'}
@@ -199,14 +193,7 @@ function SignInModal({ isOpen, onClose }: SignInModalProps) {
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
               <span className="text-sm text-gray-400">
-                Secured by{' '}
-                <Image
-                  src="/logos/dark-logo.png"
-                  alt="Kostra Logo"
-                  width={50}
-                  height={50}
-                  className="inline-block h-4 w-auto object-contain"
-                />
+                Secure sign-in
               </span>
             </div>
           </div>
