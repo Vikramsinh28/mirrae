@@ -60,9 +60,10 @@ Invariants — do not break these:
 
 ## Known debts (fix at the noted time)
 
-- `pnpm-lock.yaml` is out of sync with `package.json` (`openai` missing). Regenerate cleanly before the Docker build (`--frozen-lockfile` will fail).
-- Set the R2/S3 lifecycle rule on the `tryon/` prefix (24h) — backstop for photo deletion.
-- Route-handler tests live in `src/test/api/tryon/tryon.test.ts` (mocked service, run with `SKIP_DB_SETUP=1`). Still missing: a DB-backed integration test of the routes against `mirrae_test`.
+- Set the 24h expiry rule on the `tryon/` prefix (backstop for photo deletion). Rule is in `infra/storage/tryon-lifecycle.json`; apply with `aws s3api put-bucket-lifecycle-configuration --bucket <private-bucket> --lifecycle-configuration file://infra/storage/tryon-lifecycle.json [--endpoint-url https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com]`. It REPLACES the bucket's whole lifecycle config, so `get-bucket-lifecycle-configuration` first and merge. Storage env vars (driver, bucket names, R2 keys) are empty in `.env` as of 2026-11-13.
+- Route-handler tests: `src/test/api/tryon/tryon.test.ts` (mocked service, `SKIP_DB_SETUP=1` ok) and `tryon.integration.test.ts` (real Postgres; written but NOT yet run against a real `mirrae_test`, run it with `npx jest src/test/api/tryon/tryon.integration` once `TEST_POSTGRES_URL` is set). It refuses to run unless the DB name ends in `_test`.
+- **`.env` `POSTGRES_URL` points at the `kostra` database (seen 2026-11-13), and `TEST_POSTGRES_URL` is empty.** Point dev at `mirrae` and tests at `mirrae_test`. Prisma migrations `20261107*_tryon_job*` may have been applied to `kostra`: check by hand, never from an agent session. `jest.setup.js` now falls back to an unreachable URL instead of `kostra_test`.
+- Real-provider smoke test (spends one fal request, needs only `FAL_KEY`): `node --env-file=.env scripts/tryon-smoke.mjs <person-img> <garment-img> [out-file]`. Record latency/cost per try-on here once measured.
 - `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is empty in `.env`, so the sign-in modal throws "Missing required parameter client_id" when opened. Set it (Google Cloud OAuth client) to test sign-in.
 - Replace the hero SVG illustration with real before/after try-on images; add an `opengraph-image` for link previews.
 - Unauthenticated storefront abuse / rate-limiting is a Stage 2 concern (see the `TODO Stage 2` note in `create`).
