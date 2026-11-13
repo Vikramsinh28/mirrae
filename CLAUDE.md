@@ -11,7 +11,7 @@ Built on the Kostra Next.js SaaS boilerplate (MIT). Kostra supplies auth, Stripe
 - Zod 3.25 — server schemas in `src/validations/`
 - PostgreSQL
 - Stripe — checkout, portal, webhook that tops up `User.credits`
-- S3 / Cloudflare R2 — private bucket, presigned PUT/GET
+- AWS S3 (`ap-south-1`) — private bucket, presigned PUT/GET (see "Storage (AWS S3)" below)
 - JWT auth — cookie-based
 - Deploy: long-running `next start` Node process (nixpacks/Docker), NOT serverless. This is why `after()` from `next/server` is safe for background work.
 
@@ -25,10 +25,19 @@ Built on the Kostra Next.js SaaS boilerplate (MIT). Kostra supplies auth, Stripe
 - Repositories live in `src/services/repositories/*`. Internal services in `src/services/internal/*`. Third-party integrations in `src/services/external/*`.
 - Frontend: axios service files in `src/services/api/*`, React Query hooks in `src/hooks/*`, atomic-design components (`atoms/molecules/organisms`).
 
+## Storage (AWS S3) — set up 2026-11-13
+
+- Own AWS account `056886146611` (kept separate from the RMO/Kostra project's account). Region `ap-south-1`.
+- Private bucket `mirrae-tryon-private-056886146611`: all public access blocked; CORS allows `PUT`/`GET` from `http://localhost:3000` only (add the production domain when there is one); 24h expiry rule on the `tryon/` prefix (from `infra/storage/tryon-lifecycle.json`, verified on the bucket).
+- IAM user `mirrae-app`, least privilege: `s3:PutObject/GetObject/DeleteObject` on that bucket's objects + `s3:ListBucket` on the bucket, nothing else. Its keys are `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` in `.env` (gitignored). Rotate them with `aws iam create-access-key` / `delete-access-key` as an admin.
+- `.env`: `NEXT_PUBLIC_FILE_STORAGE_DRIVER=s3` (the code defaults to `r2`, so this must be set), `AWS_REGION=ap-south-1`, `S3_PRIVATE_BUCKET_NAME`. `S3_PUBLIC_BUCKET_NAME` is unused by try-on; if left empty the code falls back to `kostra-data-public`/`kostra-data-private` names, so never leave `S3_PRIVATE_BUCKET_NAME` empty.
+- The root user was only used once to create these; admin work needs a fresh `aws login --profile <name>` (use a named profile, then `aws logout`). Agent sessions have no AWS admin access; the `aws-mcp` server here is documentation-only.
+- Not set up (not needed yet): SES email (needs a verified sender domain), production hosting, billing budget alert.
+
 ## Databases — READ CAREFULLY
 
-- `mirrae` — dev database. `POSTGRES_URL` in `.env`.
-- `mirrae_test` — tests only. Jest global setup reads `TEST_POSTGRES_URL` and refuses any DB whose name doesn't end in `_test`. It runs `prisma db push --force-reset`, so it WIPES whatever it points at — that's why it's isolated to `_test`.
+- `mirrae` — dev database. `POSTGRES_URL` in `.env`. Runs in Docker container `mirrae-postgres-dev` (postgres:16-alpine, `127.0.0.1:5440`, persistent volume `mirrae-postgres-dev-data`, `--restart unless-stopped`). Migrations applied 2026-11-13 with `npx prisma migrate deploy` (4 migrations, incl. both `tryon_job` ones).
+- `mirrae_test` — tests only. Jest global setup reads `TEST_POSTGRES_URL` and refuses any DB whose name doesn't end in `_test`. It runs `prisma db push --force-reset`, so it WIPES whatever it points at — that's why it's isolated to `_test`. Runs in Docker container `mirrae-postgres-test` (`127.0.0.1:5439`, tmpfs: data is lost when the container stops; restart with `docker start mirrae-postgres-test`, recreate if the container was removed).
 - `kostra` — a DIFFERENT project's database on the same Postgres server. NEVER touch it.
 - Running tests: `npx jest` against `mirrae_test`. Prisma blocks `db push --force-reset` when an AI agent runs it unless `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION` is set — do NOT set that flag yourself; ask the human to run the full suite. Use `SKIP_DB_SETUP=1 npx jest` for logic-only runs.
 
@@ -48,7 +57,7 @@ Invariants — do not break these:
 
 - **Exactly-once charge:** deduction only runs after an atomic claim — `updateMany({ where: { id, status: 'DONE', chargedAt: null }, data: { chargedAt } })` succeeding on exactly one row. Never charge outside this claim.
 - **Consent required:** `TryOnJob.consentAt` is NOT NULL; `create` requires `consent: true` (exactly true). No job without consent.
-- **Privacy:** the shopper photo is deleted in a `finally` (so also on failure). An R2/S3 lifecycle rule must expire the `tryon/` prefix after 24h (set in bucket config — see debts).
+- **Privacy:** the shopper photo is deleted in a `finally` (so also on failure). An S3 lifecycle rule expires the `tryon/` prefix after 24h (applied; see "Storage (AWS S3)").
 - **Stale handling:** jobs stuck in PROCESSING or QUEUED beyond the threshold are failed, never charged. `markJobDone` only moves PROCESSING→DONE.
 - Presigned GET URLs to the provider last 3600s (≫ 75s budget).
 - Known trade-off: a hard crash between "mark DONE" and "charge" loses one credit of revenue. Accepted; comment is in the code.
@@ -60,9 +69,10 @@ Invariants — do not break these:
 
 ## Known debts (fix at the noted time)
 
-- Set the 24h expiry rule on the `tryon/` prefix (backstop for photo deletion). Rule is in `infra/storage/tryon-lifecycle.json`; apply with `aws s3api put-bucket-lifecycle-configuration --bucket <private-bucket> --lifecycle-configuration file://infra/storage/tryon-lifecycle.json [--endpoint-url https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com]`. It REPLACES the bucket's whole lifecycle config, so `get-bucket-lifecycle-configuration` first and merge. Storage env vars (driver, bucket names, R2 keys) are empty in `.env` as of 2026-11-13.
+- 24h expiry rule on `tryon/`: applied to the S3 bucket 2026-11-13 (see "Storage (AWS S3)"). If another bucket is ever added, apply `infra/storage/tryon-lifecycle.json` with `aws s3api put-bucket-lifecycle-configuration`; it REPLACES the bucket's whole lifecycle config, so `get-bucket-lifecycle-configuration` first and merge.
+- Add the production domain to the bucket CORS when deploying; set up a billing budget alert on the AWS account.
 - Route-handler tests: `src/test/api/tryon/tryon.test.ts` (mocked service, `SKIP_DB_SETUP=1` ok) and `tryon.integration.test.ts` (real Postgres; written but NOT yet run against a real `mirrae_test`, run it with `npx jest src/test/api/tryon/tryon.integration` once `TEST_POSTGRES_URL` is set). It refuses to run unless the DB name ends in `_test`.
-- **`.env` `POSTGRES_URL` points at the `kostra` database (seen 2026-11-13), and `TEST_POSTGRES_URL` is empty.** Point dev at `mirrae` and tests at `mirrae_test`. Prisma migrations `20261107*_tryon_job*` may have been applied to `kostra`: check by hand, never from an agent session. `jest.setup.js` now falls back to an unreachable URL instead of `kostra_test`.
+- `.env` `POSTGRES_URL` and `TEST_POSTGRES_URL` now point at the Docker `mirrae` / `mirrae_test` databases (fixed 2026-11-13; they used to point at `kostra` / nothing). Prisma migrations `20261107*_tryon_job*` may still have been applied to the old `kostra` database from earlier: check by hand, never from an agent session. `jest.setup.js` falls back to an unreachable URL instead of `kostra_test`.
 - Real-provider smoke test (spends one fal request, needs only `FAL_KEY`): `node --env-file=.env scripts/tryon-smoke.mjs <person-img> <garment-img> [out-file]`. Record latency/cost per try-on here once measured.
 - `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is empty in `.env`, so the sign-in modal throws "Missing required parameter client_id" when opened. Set it (Google Cloud OAuth client) to test sign-in.
 - Replace the hero SVG illustration with real before/after try-on images; add an `opengraph-image` for link previews.
