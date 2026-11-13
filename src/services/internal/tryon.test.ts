@@ -5,6 +5,7 @@ import {
   putObject,
 } from '@/services/external/aws/s3';
 import { runTryOn } from '@/services/external/tryon';
+import { findPhotoProblem } from '@/services/external/tryon-check';
 import { generateExtraView } from '@/services/external/tryon-views';
 import { CreditService } from '@/services/internal/credit';
 import * as repo from '@/services/repositories/tryon-job';
@@ -18,6 +19,7 @@ jest.mock('@/services/external/tryon', () => ({
   TryOnProviderError: class extends Error {},
 }));
 jest.mock('@/services/external/tryon-views', () => ({ generateExtraView: jest.fn() }));
+jest.mock('@/services/external/tryon-check', () => ({ findPhotoProblem: jest.fn() }));
 jest.mock('./tryon-image', () => ({
   prepareTryOnImage: jest.fn(),
   TryOnImageError: class extends Error {},
@@ -123,6 +125,7 @@ describe('TryOnService.processJob', () => {
     (generateDownloadUrl as jest.Mock).mockResolvedValue({ downloadUrl: 'https://signed' });
     (putObject as jest.Mock).mockImplementation(async () => ({ key: 'tryon/result/x.png', bucket: 'b' }));
     (prepareTryOnImage as jest.Mock).mockResolvedValue(prepared);
+    (findPhotoProblem as jest.Mock).mockResolvedValue(null);
     (runTryOn as jest.Mock).mockResolvedValue({ image: frontImage });
     (generateExtraView as jest.Mock).mockResolvedValue({ bytes: new Uint8Array([9]), contentType: 'image/png' });
     credit.deductCredits.mockResolvedValue({ success: true, newBalance: 9 });
@@ -147,6 +150,32 @@ describe('TryOnService.processJob', () => {
 
     expect(prepareTryOnImage).toHaveBeenCalledTimes(2);
     expect(runTryOn).toHaveBeenCalledWith({ personImageBase64: 'PREPARED', productImageBase64: 'PREPARED' });
+  });
+
+  test('checks the prepared photos before spending on the provider', async () => {
+    await TryOnService.processJob('job-1');
+
+    expect(findPhotoProblem).toHaveBeenCalledWith({
+      personBase64: 'PREPARED',
+      personContentType: 'image/jpeg',
+      garmentBase64: 'PREPARED',
+      garmentContentType: 'image/jpeg',
+    });
+    const checkedAt = (findPhotoProblem as jest.Mock).mock.invocationCallOrder[0];
+    const providerAt = (runTryOn as jest.Mock).mock.invocationCallOrder[0];
+    expect(checkedAt).toBeLessThan(providerAt);
+  });
+
+  test('a photo with a problem fails the job with that reason, never calls the provider or charges, and still deletes the photo', async () => {
+    (findPhotoProblem as jest.Mock).mockResolvedValue('NO_PERSON');
+
+    await TryOnService.processJob('job-1');
+
+    expect(r.markJobFailed).toHaveBeenCalledWith('job-1', 'NO_PERSON');
+    expect(runTryOn).not.toHaveBeenCalled();
+    expect(generateExtraView).not.toHaveBeenCalled();
+    expect(credit.deductCredits).not.toHaveBeenCalled();
+    expect(deleteObject).toHaveBeenCalledWith('private-bucket', personKey);
   });
 
   test('single view: stores the result, settles immediately, charges 1 credit once and deletes the shopper photo', async () => {
@@ -375,6 +404,39 @@ describe('TryOnService.getStatus', () => {
     const status = await TryOnService.getStatus('job-1', userId);
 
     expect(status).toMatchObject({ status: 'done', extrasPending: false });
+  });
+
+  test.each([
+    ['NO_PERSON', /person/i],
+    ['MULTIPLE_PEOPLE', /more than one/i],
+    ['PERSON_TOO_SMALL', /shoulders|torso/i],
+    ['NOT_CLOTHING', /clothing|garment/i],
+  ])('explains a %s failure to the user in plain words and says they were not charged', async (code, pattern) => {
+    r.findTryOnJobForUser.mockResolvedValue({
+      id: 'job-1',
+      status: 'FAILED',
+      error: code,
+      updatedAt: new Date(),
+    } as never);
+
+    const status = await TryOnService.getStatus('job-1', userId);
+
+    expect(status).toMatchObject({ status: 'failed', error: expect.stringMatching(pattern) });
+    expect(status).toMatchObject({ error: expect.stringMatching(/not been charged/i) });
+  });
+
+  test('never exposes an unknown stored error string to the user', async () => {
+    r.findTryOnJobForUser.mockResolvedValue({
+      id: 'job-1',
+      status: 'FAILED',
+      error: 'Error: connect ECONNREFUSED 10.0.0.5:5432',
+      updatedAt: new Date(),
+    } as never);
+
+    await expect(TryOnService.getStatus('job-1', userId)).resolves.toEqual({
+      status: 'failed',
+      error: 'Try-on failed. You have not been charged.',
+    });
   });
 
   test('fails a stale processing job', async () => {

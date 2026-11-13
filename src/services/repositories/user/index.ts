@@ -1,3 +1,4 @@
+import { DEFAULT_INITIAL_CREDITS } from '@/lib/constants/credits';
 import { prisma } from '@/lib/prisma';
 import { UserPlan, UserRole } from '@/lib/prisma/generated/client';
 import {
@@ -87,7 +88,7 @@ const createUser = async (user: CreateUserData) => {
     profilePicture: user.profilePicture,
     role: role,
     isOnboarded: user.isOnboarded ?? true,
-    credits: 100,
+    credits: DEFAULT_INITIAL_CREDITS,
     plan: UserPlan.FREE,
     isOverDue: false,
   };

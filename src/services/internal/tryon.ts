@@ -5,6 +5,7 @@ import {
   putObject,
 } from '@/services/external/aws/s3';
 import { runTryOn, type TryOnImage } from '@/services/external/tryon';
+import { findPhotoProblem, type PhotoProblem } from '@/services/external/tryon-check';
 import { generateExtraView, type ExtraView } from '@/services/external/tryon-views';
 import { getBucketName } from '@/services/internal/files/file-upload/file-upload-config';
 import * as repo from '@/services/repositories/tryon-job';
@@ -23,6 +24,32 @@ const MAX_RESULT_BYTES = 16 * 1024 * 1024;
 const MAX_INPUT_BYTES = 20 * 1024 * 1024;
 const INPUT_DOWNLOAD_TIMEOUT_MS = 15_000;
 const GENERIC_FAILURE = 'Try-on failed. You have not been charged.';
+
+// Stored in TryOnJob.error as the problem code; mapped to these messages when the status is read, so no
+// internal error text can ever reach the shopper.
+const PHOTO_PROBLEM_MESSAGES: Record<PhotoProblem, string> = {
+  NO_PERSON:
+    "We couldn't find a person in your photo. Upload a clear photo of yourself, standing and facing the camera. You have not been charged.",
+  MULTIPLE_PEOPLE:
+    'Your photo has more than one person in it. Upload a photo with only you in it. You have not been charged.',
+  PERSON_TOO_SMALL:
+    'You are too small or cut off in your photo. Upload a photo that shows at least your shoulders and torso. You have not been charged.',
+  NOT_CLOTHING:
+    "The product image doesn't show a piece of clothing. Upload a clear photo of the garment. You have not been charged.",
+};
+
+const isPhotoProblem = (value: string | null): value is PhotoProblem =>
+  value !== null && Object.hasOwn(PHOTO_PROBLEM_MESSAGES, value);
+
+const failureMessage = (storedError: string | null) =>
+  isPhotoProblem(storedError) ? PHOTO_PROBLEM_MESSAGES[storedError] : GENERIC_FAILURE;
+
+class PhotoRejectedError extends Error {
+  constructor(readonly problem: PhotoProblem) {
+    super(`Photo rejected: ${problem}`);
+    this.name = 'PhotoRejectedError';
+  }
+}
 
 export type TryOnViews = keyof typeof VIEW_COUNT;
 
@@ -112,6 +139,14 @@ async function generateFrontView(job: ProcessableJob): Promise<FrontViewResult |
       loadPreparedImage(job.productImageKey),
     ]);
 
+    const problem = await findPhotoProblem({
+      personBase64: person.base64,
+      personContentType: person.contentType,
+      garmentBase64: garment.base64,
+      garmentContentType: garment.contentType,
+    });
+    if (problem) throw new PhotoRejectedError(problem);
+
     const { image } = await runTryOn({ personImageBase64: person.base64, productImageBase64: garment.base64 });
     assertValidResultImage(image);
     const { key } = await putObject('TryOnResult', 'u', job.userId, image.contentType, image.bytes);
@@ -124,8 +159,12 @@ async function generateFrontView(job: ProcessableJob): Promise<FrontViewResult |
     }
     return { image, garment };
   } catch (error) {
-    console.error('Try-on job failed', { jobId: job.id, error });
-    await repo.markJobFailed(job.id, GENERIC_FAILURE);
+    if (error instanceof PhotoRejectedError) {
+      await repo.markJobFailed(job.id, error.problem);
+    } else {
+      console.error('Try-on job failed', { jobId: job.id, error });
+      await repo.markJobFailed(job.id, GENERIC_FAILURE);
+    }
     return null;
   } finally {
     await deleteShopperPhoto(job.personImageKey);
@@ -245,7 +284,7 @@ export class TryOnService {
         extrasPending,
       };
     }
-    if (job.status === 'FAILED') return { status: 'failed', error: GENERIC_FAILURE };
+    if (job.status === 'FAILED') return { status: 'failed', error: failureMessage(job.error) };
 
     if (job.updatedAt < staleBefore && (await repo.failStaleJob(job.id, staleBefore, GENERIC_FAILURE))) {
       return { status: 'failed', error: GENERIC_FAILURE };

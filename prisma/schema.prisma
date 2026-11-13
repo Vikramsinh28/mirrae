@@ -50,7 +50,7 @@ model User {
   profilePicture     String? // URL to the profile picture
   role               UserRole            @default(USER)
   isOnboarded        Boolean             @default(false)
-  credits            Float               @default(100.0) // Available credits
+  credits            Float               @default(5.0) // Available credits; free trial amount, see DEFAULT_INITIAL_CREDITS
   stripeCustomerId   String?             @unique
   plan               UserPlan            @default(FREE)
   isOverDue          Boolean             @default(false)

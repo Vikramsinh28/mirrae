@@ -10,6 +10,7 @@ import { NextRequest, after } from 'next/server';
 import { getAuthUser } from '@/lib/auth/jwt';
 import { deleteObject, generateDownloadUrl, objectExists, putObject } from '@/services/external/aws/s3';
 import { runTryOn } from '@/services/external/tryon';
+import { findPhotoProblem } from '@/services/external/tryon-check';
 import { generateExtraView } from '@/services/external/tryon-views';
 import { TryOnService } from '@/services/internal/tryon';
 import * as tryOnRepo from '@/services/repositories/tryon-job';
@@ -27,6 +28,7 @@ jest.mock('@/services/external/tryon', () => ({
   TryOnProviderError: class extends Error {},
 }));
 jest.mock('@/services/external/tryon-views', () => ({ generateExtraView: jest.fn() }));
+jest.mock('@/services/external/tryon-check', () => ({ findPhotoProblem: jest.fn() }));
 jest.mock('@/services/internal/tryon-image', () => ({
   prepareTryOnImage: jest.fn().mockResolvedValue({ base64: 'PREPARED', contentType: 'image/jpeg' }),
   TryOnImageError: class extends Error {},
@@ -41,6 +43,7 @@ const afterMock = after as jest.MockedFunction<typeof after>;
 const providerMock = runTryOn as jest.MockedFunction<typeof runTryOn>;
 const deleteObjectMock = deleteObject as jest.MockedFunction<typeof deleteObject>;
 const extraViewMock = generateExtraView as jest.MockedFunction<typeof generateExtraView>;
+const photoProblemMock = findPhotoProblem as jest.MockedFunction<typeof findPhotoProblem>;
 
 const STALE_AGE_MS = 10 * 60 * 1000;
 const RESULT_KEY = 'tryon/result/u/1/result.png';
@@ -112,6 +115,7 @@ describe('Try-on API against a real database', () => {
     (putObject as jest.Mock).mockResolvedValue({ key: RESULT_KEY });
     deleteObjectMock.mockResolvedValue(undefined as never);
     providerMock.mockResolvedValue({ image: { bytes: new Uint8Array([1, 2, 3]), contentType: 'image/png' } });
+    photoProblemMock.mockResolvedValue(null);
     extraViewMock.mockResolvedValue({ bytes: new Uint8Array([4, 5, 6]), contentType: 'image/png' });
     // A fresh Response per call: a body can be read only once.
     global.fetch = jest.fn().mockImplementation(
@@ -303,5 +307,23 @@ describe('Try-on API against a real database', () => {
 
     expect(response.status).toBe(402);
     expect(await testPrisma.tryOnJob.count()).toBe(0);
+  });
+  test('a photo with no person fails the job without calling the provider, charges nothing and explains why', async () => {
+    const user = await createTestUser({ credits: 5 });
+    const jobId = await createJobVia(user);
+    photoProblemMock.mockResolvedValue('NO_PERSON');
+
+    await TryOnService.processJob(jobId);
+
+    const job = await testPrisma.tryOnJob.findUniqueOrThrow({ where: { id: jobId } });
+    expect(job).toMatchObject({ status: 'FAILED', error: 'NO_PERSON', chargedAt: null });
+    expect(providerMock).not.toHaveBeenCalled();
+    expect(await creditsOf(user.id)).toBe(5);
+    expect(deleteObjectMock).toHaveBeenCalledWith('private-bucket', personKey(user));
+
+    const response = await getStatus(jobId);
+    const body = await response.json();
+    expect(body.data.status).toBe('failed');
+    expect(body.data.error).toMatch(/person/i);
   });
 });
