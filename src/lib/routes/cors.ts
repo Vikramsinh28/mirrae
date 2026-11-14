@@ -10,6 +10,16 @@ export const CORS_OPTIONS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-User-ID, X-Custom-Token',
 } as const;
 
+const STOREFRONT_PATH_PREFIX = '/api/storefront/';
+
+export const STOREFRONT_CORS_OPTIONS = {
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, X-Storefront-Token',
+  'Access-Control-Max-Age': '600',
+} as const;
+
+const isStorefrontRequest = (request: NextRequest) => request.nextUrl.pathname.startsWith(STOREFRONT_PATH_PREFIX);
+
 /**
  * Helper function to compute dynamic CORS headers for streaming responses
  * and other non-NextResponse scenarios
@@ -36,6 +46,9 @@ export function withCors(request: NextRequest, headers: Record<string, string> =
  * Apply CORS headers to the response
  */
 export function applyCorsHeaders(request: NextRequest, response: NextResponse): NextResponse {
+  // Storefront routes set their own CORS headers (any shop origin, no credentials)
+  if (isStorefrontRequest(request)) return response;
+
   const origin = request.headers.get('origin') ?? '';
 
   if (ALLOWED_ORIGINS.includes(origin)) {
@@ -58,6 +71,22 @@ export function handleCorsPreflightRequest(request: NextRequest): NextResponse |
   if (request.method !== 'OPTIONS') return null;
 
   const origin = request.headers.get('origin') ?? '';
+
+  if (isStorefrontRequest(request)) {
+    // Any origin may ask; the real request is checked against the shop's allowed origins and token.
+    // No credentials: the widget authenticates with a token header, never cookies.
+    return NextResponse.json(
+      {},
+      {
+        headers: {
+          ...(origin && { 'Access-Control-Allow-Origin': origin }),
+          Vary: 'Origin',
+          ...STOREFRONT_CORS_OPTIONS,
+        },
+      }
+    );
+  }
+
   const preflightHeaders = {
     ...(ALLOWED_ORIGINS.includes(origin) && {
       'Access-Control-Allow-Origin': origin,

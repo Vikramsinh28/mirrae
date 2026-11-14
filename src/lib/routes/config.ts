@@ -25,6 +25,13 @@ export const ALL_ROUTES: RouteConfig[] = [
 
   // Public webhooks and auth
   { path: '/api/webhooks/stripe', isPublic: true },
+
+  // Anonymous storefront API used by the embeddable widget (shoppers have no account).
+  // Protected by a signed session token, the shop's allowed origins, rate limits and per-shop caps.
+  { path: '/api/storefront/session', isPublic: true },
+  { path: '/api/storefront/photo', isPublic: true },
+  { path: '/api/storefront/tryon', isPublic: true },
+  { path: '/api/storefront/status', isPublic: true },
   { path: '/api/auth/logout', isPublic: true },
   { path: '/api/auth', isPublic: true },
   { path: '/api/auth/google/verify', isPublic: true },

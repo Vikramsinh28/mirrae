@@ -1,18 +1,62 @@
+import { creditsForViewCount, RESERVATION_WINDOW_MS } from '@/lib/constants/tryon';
 import { prisma } from '@/lib/prisma';
 
-export const createTryOnJob = (data: {
+export interface NewTryOnJob {
   userId: number;
   personImageKey: string;
   productImageKey: string;
   viewCount: number;
   consentAt: Date;
   expiresAt: Date;
-}) => prisma.tryOnJob.create({ data });
+  /** Set for storefront try-ons: userId is then the shop owner who pays. */
+  shopId?: string;
+  sessionId?: string;
+}
+
+// First key of the two-int advisory lock, so this lock never collides with other advisory locks.
+const TRYON_CREATE_LOCK_NAMESPACE = 41_001;
+
+/**
+ * Creates the job only if the user's balance covers it after the credits already held by their running jobs.
+ * Creates for one user are serialised with a transaction-scoped advisory lock, so several jobs started at
+ * once cannot each pass the check and then finish unpaid.
+ */
+export const createTryOnJobIfAffordable = (
+  data: NewTryOnJob,
+  creditsNeeded: number
+): Promise<{ ok: true; job: { id: string } } | { ok: false }> =>
+  prisma.$transaction(async tx => {
+    // $executeRaw, not $queryRaw: the lock function returns void, which Prisma cannot read as a result column.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${TRYON_CREATE_LOCK_NAMESPACE}::int, ${data.userId}::int)`;
+
+    const user = await tx.user.findUnique({ where: { id: data.userId }, select: { credits: true } });
+    if (!user) return { ok: false as const };
+
+    const holding = await tx.tryOnJob.groupBy({
+      by: ['viewCount'],
+      where: {
+        userId: data.userId,
+        updatedAt: { gte: new Date(Date.now() - RESERVATION_WINDOW_MS) },
+        OR: [{ status: { in: ['QUEUED', 'PROCESSING'] } }, { status: 'DONE', chargedAt: null }],
+      },
+      _count: { _all: true },
+    });
+    const held = holding.reduce((sum, group) => sum + group._count._all * creditsForViewCount(group.viewCount), 0);
+
+    if (user.credits - held < creditsNeeded) return { ok: false as const };
+
+    const job = await tx.tryOnJob.create({ data });
+    return { ok: true as const, job: { id: job.id } };
+  });
 
 export const findTryOnJob = (id: string) => prisma.tryOnJob.findUnique({ where: { id } });
 
 export const findTryOnJobForUser = (id: string, userId: number) =>
   prisma.tryOnJob.findFirst({ where: { id, userId } });
+
+/** A storefront shopper can only read jobs started by their own session on that shop. */
+export const findTryOnJobForSession = (id: string, shopId: string, sessionId: string) =>
+  prisma.tryOnJob.findFirst({ where: { id, shopId, sessionId } });
 
 export const claimQueuedJob = async (id: string): Promise<boolean> => {
   const { count } = await prisma.tryOnJob.updateMany({

@@ -1,4 +1,4 @@
-import { findPhotoProblem } from './tryon-check';
+import { findPersonProblem, findPhotoProblem } from './tryon-check';
 
 const getAccessToken = jest.fn();
 jest.mock('google-auth-library', () => ({
@@ -103,5 +103,48 @@ describe('findPhotoProblem', () => {
   test('fails open when the access token cannot be obtained', async () => {
     getAccessToken.mockRejectedValue(new Error('no credentials'));
     await expect(findPhotoProblem(input)).resolves.toBeNull();
+  });
+});
+
+describe('findPersonProblem (checks only the shopper photo, used right after upload)', () => {
+  const originalProject = process.env.GOOGLE_CLOUD_PROJECT;
+  let fetchSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    process.env.GOOGLE_CLOUD_PROJECT = 'test-project';
+    getAccessToken.mockResolvedValue('test-token');
+    fetchSpy = jest.spyOn(global, 'fetch');
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    getAccessToken.mockReset();
+    if (originalProject === undefined) delete process.env.GOOGLE_CLOUD_PROJECT;
+    else process.env.GOOGLE_CLOUD_PROJECT = originalProject;
+  });
+
+  const photo = { base64: 'UEVSU09O', contentType: 'image/jpeg' };
+
+  test('makes exactly one call and returns null for a good photo', async () => {
+    fetchSpy.mockImplementation(async () => reply(goodPerson));
+
+    await expect(findPersonProblem(photo)).resolves.toBeNull();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([
+    [{ personCount: 0, torsoVisible: false, isPhotoOfRealPerson: false }, 'NO_PERSON'],
+    [{ personCount: 2, torsoVisible: true, isPhotoOfRealPerson: true }, 'MULTIPLE_PEOPLE'],
+    [{ personCount: 1, torsoVisible: false, isPhotoOfRealPerson: true }, 'PERSON_TOO_SMALL'],
+  ])('flags %j as %s', async (person, expected) => {
+    fetchSpy.mockImplementation(async () => reply(person));
+    await expect(findPersonProblem(photo)).resolves.toBe(expected);
+  });
+
+  test('fails open when the checker is down', async () => {
+    fetchSpy.mockResolvedValue(new Response('boom', { status: 503 }));
+    await expect(findPersonProblem(photo)).resolves.toBeNull();
   });
 });

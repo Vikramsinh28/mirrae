@@ -12,6 +12,7 @@ import { deleteObject, generateDownloadUrl, objectExists, putObject } from '@/se
 import { runTryOn } from '@/services/external/tryon';
 import { findPhotoProblem } from '@/services/external/tryon-check';
 import { generateExtraView } from '@/services/external/tryon-views';
+import { CreditService } from '@/services/internal/credit';
 import { TryOnService } from '@/services/internal/tryon';
 import * as tryOnRepo from '@/services/repositories/tryon-job';
 import { cleanupDatabase, createTestUser, disconnectTestDatabase, testPrisma } from '../../setup';
@@ -325,5 +326,39 @@ describe('Try-on API against a real database', () => {
     const body = await response.json();
     expect(body.data.status).toBe('failed');
     expect(body.data.error).toMatch(/person/i);
+  });
+  test('five simultaneous creates with 2 credits start exactly 2 jobs, so none can finish unpaid', async () => {
+    const user = await createTestUser({ credits: 2 });
+    signInAs(user);
+
+    const responses = await Promise.all(Array.from({ length: 5 }, () => postCreate(user)));
+
+    const statuses = responses.map(response => response.status).sort();
+    expect(statuses).toEqual([202, 202, 402, 402, 402]);
+    expect(await testPrisma.tryOnJob.count({ where: { userId: user.id } })).toBe(2);
+  });
+
+  test('a running 3-view job holds its 2 credits, so a second job is refused until it settles', async () => {
+    const user = await createTestUser({ credits: 2 });
+    await createJobVia(user, { views: 'multi' });
+
+    signInAs(user);
+    const second = await postCreate(user);
+
+    expect(second.status).toBe(402);
+  });
+
+  test('ten simultaneous deductions of 1 credit from a balance of 5 succeed exactly 5 times and lose nothing', async () => {
+    const user = await createTestUser({ credits: 5 });
+
+    const results = await Promise.all(
+      Array.from({ length: 10 }, (_, index) =>
+        CreditService.deductCredits({ userId: user.id, amount: 1, operation: 'TRYON', objectId: `race-${index}` })
+      )
+    );
+
+    expect(results.filter(result => result.success)).toHaveLength(5);
+    expect(await creditsOf(user.id)).toBe(0);
+    expect(await testPrisma.creditHistory.count({ where: { userId: user.id } })).toBe(5);
   });
 });

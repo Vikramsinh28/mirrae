@@ -9,9 +9,15 @@ export interface CreditTransactionInput {
   description?: string;
 }
 
+const isValidAmount = (amount: number) => Number.isFinite(amount) && amount > 0;
+
+const PRISMA_RECORD_NOT_FOUND = 'P2025';
+
 export class CreditService {
   /**
-   * Deduct credits from user account and record transaction
+   * Deduct credits from user account and record transaction.
+   * The balance check and the decrement are ONE conditional UPDATE, so concurrent deductions can never
+   * both read the same balance (a read-then-write here lost credits under load).
    */
   static async deductCredits({
     userId,
@@ -20,31 +26,26 @@ export class CreditService {
     objectId,
     description,
   }: CreditTransactionInput): Promise<{ success: boolean; newBalance: number; error?: string }> {
+    if (!isValidAmount(amount)) return { success: false, newBalance: 0, error: 'Invalid amount' };
+
     try {
       const result = await prisma.$transaction(async tx => {
-        // Get current user credits
-        const user = await tx.user.findUnique({
+        const { count } = await tx.user.updateMany({
+          where: { id: userId, credits: { gte: amount } },
+          data: { credits: { decrement: amount } },
+        });
+
+        if (count === 0) {
+          const exists = await tx.user.findUnique({ where: { id: userId }, select: { id: true } });
+          throw new Error(exists ? 'Insufficient credits' : 'User not found');
+        }
+
+        // The row stays locked by the UPDATE above until commit, so this is exactly our balance.
+        const { credits: newBalance } = await tx.user.findUniqueOrThrow({
           where: { id: userId },
           select: { credits: true },
         });
 
-        if (!user) {
-          throw new Error('User not found');
-        }
-
-        if (user.credits < amount) {
-          throw new Error('Insufficient credits');
-        }
-
-        const newBalance = user.credits - amount;
-
-        // Update user credits
-        await tx.user.update({
-          where: { id: userId },
-          data: { credits: newBalance },
-        });
-
-        // Record credit history
         await tx.creditHistory.create({
           data: {
             userId,
@@ -72,7 +73,7 @@ export class CreditService {
   }
 
   /**
-   * Add credits to user account and record transaction
+   * Add credits to user account and record transaction (one atomic increment).
    */
   static async addCredits({
     userId,
@@ -81,27 +82,16 @@ export class CreditService {
     objectId,
     description,
   }: CreditTransactionInput): Promise<{ success: boolean; newBalance: number; error?: string }> {
+    if (!isValidAmount(amount)) return { success: false, newBalance: 0, error: 'Invalid amount' };
+
     try {
       const result = await prisma.$transaction(async tx => {
-        // Get current user credits
-        const user = await tx.user.findUnique({
+        const { credits: newBalance } = await tx.user.update({
           where: { id: userId },
+          data: { credits: { increment: amount } },
           select: { credits: true },
         });
 
-        if (!user) {
-          throw new Error('User not found');
-        }
-
-        const newBalance = user.credits + amount;
-
-        // Update user credits
-        await tx.user.update({
-          where: { id: userId },
-          data: { credits: newBalance },
-        });
-
-        // Record credit history
         await tx.creditHistory.create({
           data: {
             userId,
@@ -120,10 +110,11 @@ export class CreditService {
       return { success: true, newBalance: result.newBalance };
     } catch (error) {
       console.error('Error adding credits:', error);
+      const notFound = (error as { code?: string } | null)?.code === PRISMA_RECORD_NOT_FOUND;
       return {
         success: false,
         newBalance: 0,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: notFound ? 'User not found' : error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }

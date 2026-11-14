@@ -49,7 +49,7 @@ describe('TryOnService.createJob', () => {
       ok: false,
       reason: 'CONSENT_REQUIRED',
     });
-    expect(r.createTryOnJob).not.toHaveBeenCalled();
+    expect(r.createTryOnJobIfAffordable).not.toHaveBeenCalled();
   });
 
   test('rejects keys that do not belong to the user', async () => {
@@ -66,49 +66,122 @@ describe('TryOnService.createJob', () => {
     });
     const result = await TryOnService.createJob(base);
     expect(result).toEqual({ ok: false, reason: 'INVALID_KEY' });
-    expect(r.createTryOnJob).not.toHaveBeenCalled();
+    expect(r.createTryOnJobIfAffordable).not.toHaveBeenCalled();
   });
 
-  test('rejects when the user has no credit', async () => {
-    credit.hassufficientCredits.mockResolvedValue(false);
+  test('rejects when the repository says the user cannot afford it (balance minus credits held by running jobs)', async () => {
+    r.createTryOnJobIfAffordable.mockResolvedValue({ ok: false });
     const result = await TryOnService.createJob(base);
     expect(result).toEqual({ ok: false, reason: 'INSUFFICIENT_CREDITS' });
-    expect(r.createTryOnJob).not.toHaveBeenCalled();
   });
 
   test('creates a queued single-view job needing 1 credit, with consentAt and a 24h expiry', async () => {
-    credit.hassufficientCredits.mockResolvedValue(true);
-    r.createTryOnJob.mockResolvedValue({ id: 'job-1' } as never);
+    r.createTryOnJobIfAffordable.mockResolvedValue({ ok: true, job: { id: 'job-1' } });
 
     const result = await TryOnService.createJob(base);
 
     expect(result).toEqual({ ok: true, jobId: 'job-1' });
-    expect(credit.hassufficientCredits).toHaveBeenCalledWith(userId, 1);
     expect(objectExists).toHaveBeenCalledWith('private-bucket', personKey);
     expect(objectExists).toHaveBeenCalledWith('private-bucket', productKey);
-    const data = r.createTryOnJob.mock.calls[0][0];
+    const [data, creditsNeeded] = r.createTryOnJobIfAffordable.mock.calls[0];
+    expect(creditsNeeded).toBe(1);
     expect(data.viewCount).toBe(1);
     expect(data.consentAt).toBeInstanceOf(Date);
     expect(data.expiresAt.getTime() - Date.now()).toBeGreaterThan(23 * 3600_000);
   });
 
   test('a 3-view job needs 2 credits up front and stores viewCount 3', async () => {
-    credit.hassufficientCredits.mockResolvedValue(true);
-    r.createTryOnJob.mockResolvedValue({ id: 'job-2' } as never);
+    r.createTryOnJobIfAffordable.mockResolvedValue({ ok: true, job: { id: 'job-2' } });
 
     await TryOnService.createJob({ ...base, views: 'multi' });
 
-    expect(credit.hassufficientCredits).toHaveBeenCalledWith(userId, 2);
-    expect(r.createTryOnJob.mock.calls[0][0].viewCount).toBe(3);
+    const [data, creditsNeeded] = r.createTryOnJobIfAffordable.mock.calls[0];
+    expect(creditsNeeded).toBe(2);
+    expect(data.viewCount).toBe(3);
   });
 
-  test('a 3-view job is refused when the user can afford only 1 credit', async () => {
-    credit.hassufficientCredits.mockImplementation(async (_user, amount) => amount <= 1);
+  test('never uses the racy balance pre-check any more', async () => {
+    r.createTryOnJobIfAffordable.mockResolvedValue({ ok: true, job: { id: 'job-1' } });
 
-    const result = await TryOnService.createJob({ ...base, views: 'multi' });
+    await TryOnService.createJob(base);
 
-    expect(result).toEqual({ ok: false, reason: 'INSUFFICIENT_CREDITS' });
-    expect(r.createTryOnJob).not.toHaveBeenCalled();
+    expect(credit.hassufficientCredits).not.toHaveBeenCalled();
+  });
+});
+
+describe('TryOnService.createJob for a storefront shop', () => {
+  const shopId = '8a1f0c52-1111-4222-8333-444455556666';
+  const sessionId = 'sess-abc';
+  const ownerId = 7;
+  const storefrontBase = {
+    userId: ownerId,
+    personImageKey: `tryon/person/${shopId}/${sessionId}/1-a.jpg`,
+    productImageKey: `tryon/product/${shopId}/${sessionId}/1-b.jpg`,
+    consent: true,
+    storefront: { shopId, sessionId },
+  };
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+    (objectExists as jest.Mock).mockResolvedValue(true);
+    r.createTryOnJobIfAffordable.mockResolvedValue({ ok: true, job: { id: 'job-s1' } });
+  });
+
+  test('accepts keys written for this shop and session and records the shop and session on the job', async () => {
+    const result = await TryOnService.createJob(storefrontBase);
+
+    expect(result).toEqual({ ok: true, jobId: 'job-s1' });
+    const [data] = r.createTryOnJobIfAffordable.mock.calls[0];
+    expect(data).toMatchObject({ userId: ownerId, shopId, sessionId });
+  });
+
+  test("refuses another shopper session's photo, even on the same shop", async () => {
+    const result = await TryOnService.createJob({
+      ...storefrontBase,
+      personImageKey: `tryon/person/${shopId}/another-session/1-a.jpg`,
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'INVALID_KEY' });
+    expect(r.createTryOnJobIfAffordable).not.toHaveBeenCalled();
+  });
+
+  test("refuses another shop's keys", async () => {
+    const result = await TryOnService.createJob({
+      ...storefrontBase,
+      productImageKey: `tryon/product/other-shop/${sessionId}/1-b.jpg`,
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'INVALID_KEY' });
+  });
+
+  test('refuses account-style keys on a storefront job, so a shopper cannot borrow a merchant photo', async () => {
+    const result = await TryOnService.createJob({
+      ...storefrontBase,
+      personImageKey: `tryon/person/u/${ownerId}/1-a.jpg`,
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'INVALID_KEY' });
+  });
+
+  test.each(['tryon/person/../../x', 'tryon/person/shop/sess/a/b', `tryon/person/${shopId}/${sessionId}/`])(
+    'refuses the odd key %p',
+    async key => {
+      const result = await TryOnService.createJob({ ...storefrontBase, personImageKey: key });
+      expect(result).toEqual({ ok: false, reason: 'INVALID_KEY' });
+    }
+  );
+
+  test('a normal merchant job still uses account-style keys and records no shop', async () => {
+    const result = await TryOnService.createJob({
+      userId: ownerId,
+      personImageKey: `tryon/person/u/${ownerId}/1-a.jpg`,
+      productImageKey: `tryon/product/u/${ownerId}/1-b.jpg`,
+      consent: true,
+    });
+
+    expect(result).toEqual({ ok: true, jobId: 'job-s1' });
+    const [data] = r.createTryOnJobIfAffordable.mock.calls[0];
+    expect(data.shopId).toBeUndefined();
   });
 });
 
@@ -465,5 +538,39 @@ describe('TryOnService.getStatus', () => {
   test('reports in-flight jobs as processing', async () => {
     r.findTryOnJobForUser.mockResolvedValue({ id: 'job-1', status: 'QUEUED', updatedAt: new Date() } as never);
     await expect(TryOnService.getStatus('job-1', userId)).resolves.toEqual({ status: 'queued' });
+  });
+});
+
+describe('TryOnService.getStatusForSession', () => {
+  beforeEach(() => {
+    jest.resetAllMocks();
+    (generateDownloadUrl as jest.Mock).mockResolvedValue({ downloadUrl: 'https://signed' });
+  });
+
+  test('returns null for a job that belongs to another session or shop', async () => {
+    r.findTryOnJobForSession.mockResolvedValue(null);
+
+    await expect(TryOnService.getStatusForSession('job-1', 'shop-1', 'sess-1')).resolves.toBeNull();
+    expect(r.findTryOnJobForSession).toHaveBeenCalledWith('job-1', 'shop-1', 'sess-1');
+  });
+
+  test('reports a finished job exactly like the account view does', async () => {
+    r.findTryOnJobForSession.mockResolvedValue({
+      id: 'job-1',
+      status: 'DONE',
+      resultImageKey: 'tryon/result/front.png',
+      sideImageKey: null,
+      backImageKey: null,
+      viewCount: 1,
+      extrasSettledAt: new Date(),
+      updatedAt: new Date(),
+    } as never);
+
+    await expect(TryOnService.getStatusForSession('job-1', 'shop-1', 'sess-1')).resolves.toEqual({
+      status: 'done',
+      resultUrl: 'https://signed',
+      viewCount: 1,
+      extrasPending: false,
+    });
   });
 });

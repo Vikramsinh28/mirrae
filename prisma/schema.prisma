@@ -66,6 +66,7 @@ model User {
   campaigns          Campaign[]
   campaignRecipients CampaignRecipient[]
   tryOnJobs          TryOnJob[]
+  shops              Shop[]
 }
 
 model Package {
@@ -121,6 +122,41 @@ enum CreditOperation {
   TRYON
 }
 
+enum ShopPlatform {
+  WEB
+  SHOPIFY
+  WOOCOMMERCE
+  API
+}
+
+enum ShopStatus {
+  ACTIVE
+  SUSPENDED
+  UNINSTALLED
+}
+
+// A storefront that embeds the try-on widget. Its try-ons are paid from the owner's credits.
+model Shop {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerId        Int // The merchant (User) whose credits pay for this shop's try-ons
+  name           String
+  platform       ShopPlatform @default(WEB)
+  domain         String // Store domain without scheme, e.g. store.myshopify.com
+  publicKey      String       @unique // pk_..., safe to embed in storefront pages
+  allowedOrigins String[] // Exact origins the widget may run on, e.g. https://www.example.com
+  imageHosts     String[] // Hosts product images may be downloaded from (SSRF allowlist)
+  status         ShopStatus   @default(ACTIVE)
+  dailyTryOnCap  Int          @default(200) // Max try-ons started per UTC day across all shoppers
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  tryOnJobs TryOnJob[]
+
+  @@unique([platform, domain])
+  @@index([ownerId])
+}
+
 enum TryOnStatus {
   QUEUED
   PROCESSING
@@ -145,11 +181,15 @@ model TryOnJob {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   expiresAt       DateTime
+  shopId          String?     @db.Uuid // Set for storefront try-ons; userId is then the shop owner
+  sessionId       String? // Anonymous shopper session that started a storefront try-on
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shop Shop? @relation(fields: [shopId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
   @@index([status, updatedAt])
+  @@index([shopId, createdAt])
 }
 
 model Blog {

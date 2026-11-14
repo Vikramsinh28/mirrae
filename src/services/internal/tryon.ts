@@ -7,15 +7,12 @@ import {
 import { runTryOn, type TryOnImage } from '@/services/external/tryon';
 import { findPhotoProblem, type PhotoProblem } from '@/services/external/tryon-check';
 import { generateExtraView, type ExtraView } from '@/services/external/tryon-views';
+import { CREDITS_FULL_SET, CREDITS_SINGLE_VIEW, creditsForViewCount, VIEW_COUNT } from '@/lib/constants/tryon';
 import { getBucketName } from '@/services/internal/files/file-upload/file-upload-config';
 import * as repo from '@/services/repositories/tryon-job';
 import { CreditService } from './credit';
 import { prepareTryOnImage, type PreparedTryOnImage } from './tryon-image';
 
-const CREDITS_SINGLE_VIEW = 1;
-// 3 views (front + side + back) cost 2 credits; if an extra view fails the shopper pays only 1.
-const CREDITS_FULL_SET = 2;
-const VIEW_COUNT = { single: 1, multi: 3 } as const;
 const EXTRA_VIEWS: readonly ExtraView[] = ['side', 'back'];
 
 const JOB_TTL_MS = 24 * 60 * 60 * 1000;
@@ -27,7 +24,7 @@ const GENERIC_FAILURE = 'Try-on failed. You have not been charged.';
 
 // Stored in TryOnJob.error as the problem code; mapped to these messages when the status is read, so no
 // internal error text can ever reach the shopper.
-const PHOTO_PROBLEM_MESSAGES: Record<PhotoProblem, string> = {
+export const PHOTO_PROBLEM_MESSAGES: Record<PhotoProblem, string> = {
   NO_PERSON:
     "We couldn't find a person in your photo. Upload a clear photo of yourself, standing and facing the camera. You have not been charged.",
   MULTIPLE_PEOPLE:
@@ -77,8 +74,23 @@ interface FrontViewResult {
 
 type ProcessableJob = NonNullable<Awaited<ReturnType<typeof repo.findTryOnJob>>>;
 
-const isOwnedKey = (key: string, kind: 'person' | 'product', userId: number) =>
-  new RegExp(`^tryon/${kind}/[^/]+/${userId}/[^/]+$`).test(key);
+export interface StorefrontOwner {
+  shopId: string;
+  sessionId: string;
+}
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Account keys look like tryon/<kind>/<anything>/<userId>/<file>; storefront keys like
+ * tryon/<kind>/<shopId>/<sessionId>/<file>. The two never match each other, so a shopper cannot use a
+ * merchant's photo and one shopper cannot use another shopper's.
+ */
+const isOwnedKey = (key: string, kind: 'person' | 'product', userId: number, storefront?: StorefrontOwner) =>
+  (storefront
+    ? new RegExp(`^tryon/${kind}/${escapeRegExp(storefront.shopId)}/${escapeRegExp(storefront.sessionId)}/[^/]+$`)
+    : new RegExp(`^tryon/${kind}/[^/]+/${userId}/[^/]+$`)
+  ).test(key);
 
 const privateBucket = () => getBucketName('private');
 
@@ -86,7 +98,6 @@ const signedUrl = async (key: string) => (await generateDownloadUrl(privateBucke
 
 const signedUrlOrUndefined = async (key: string | null) => (key ? signedUrl(key) : undefined);
 
-const creditsNeeded = (views: TryOnViews) => (views === 'multi' ? CREDITS_FULL_SET : CREDITS_SINGLE_VIEW);
 
 /** Downloads one stored photo and normalises it (orientation, bars, size, JPEG) for the provider. */
 async function loadPreparedImage(key: string): Promise<PreparedTryOnImage> {
@@ -201,6 +212,34 @@ async function generateExtraViews(job: ProcessableJob, front: FrontViewResult): 
   return results.filter(Boolean).length;
 }
 
+async function buildStatus(job: ProcessableJob): Promise<TryOnStatusResult> {
+  const staleBefore = new Date(Date.now() - STALE_JOB_MS);
+
+  if (job.status === 'DONE' && job.resultImageKey) {
+    const [resultUrl, sideUrl, backUrl] = await Promise.all([
+      signedUrl(job.resultImageKey),
+      signedUrlOrUndefined(job.sideImageKey),
+      signedUrlOrUndefined(job.backImageKey),
+    ]);
+    // A crashed worker leaves extras unsettled forever: stop reporting them as pending once the job is stale.
+    const extrasPending = job.viewCount > VIEW_COUNT.single && !job.extrasSettledAt && job.updatedAt >= staleBefore;
+    return {
+      status: 'done',
+      resultUrl,
+      ...(sideUrl ? { sideUrl } : {}),
+      ...(backUrl ? { backUrl } : {}),
+      viewCount: job.viewCount,
+      extrasPending,
+    };
+  }
+  if (job.status === 'FAILED') return { status: 'failed', error: failureMessage(job.error) };
+
+  if (job.updatedAt < staleBefore && (await repo.failStaleJob(job.id, staleBefore, GENERIC_FAILURE))) {
+    return { status: 'failed', error: GENERIC_FAILURE };
+  }
+  return { status: job.status === 'QUEUED' ? 'queued' : 'processing' };
+}
+
 export class TryOnService {
   static async createJob(input: {
     userId: number;
@@ -208,13 +247,15 @@ export class TryOnService {
     productImageKey: string;
     consent: boolean;
     views?: TryOnViews;
+    /** Set for a storefront try-on: userId is the shop owner who pays, the keys belong to this shopper session. */
+    storefront?: StorefrontOwner;
   }): Promise<CreateJobResult> {
     // TODO Stage 2: rate-limit unauthenticated storefront try-ons
     if (!input.consent) return { ok: false, reason: 'CONSENT_REQUIRED' };
 
     if (
-      !isOwnedKey(input.personImageKey, 'person', input.userId) ||
-      !isOwnedKey(input.productImageKey, 'product', input.userId)
+      !isOwnedKey(input.personImageKey, 'person', input.userId, input.storefront) ||
+      !isOwnedKey(input.productImageKey, 'product', input.userId, input.storefront)
     ) {
       return { ok: false, reason: 'INVALID_KEY' };
     }
@@ -228,21 +269,23 @@ export class TryOnService {
       return { ok: false, reason: 'INVALID_KEY' };
     }
 
-    const views = input.views ?? 'single';
-    if (!(await CreditService.hassufficientCredits(input.userId, creditsNeeded(views)))) {
-      return { ok: false, reason: 'INSUFFICIENT_CREDITS' };
-    }
-
+    const viewCount = VIEW_COUNT[input.views ?? 'single'];
     const now = new Date();
-    const job = await repo.createTryOnJob({
-      userId: input.userId,
-      personImageKey: input.personImageKey,
-      productImageKey: input.productImageKey,
-      viewCount: VIEW_COUNT[views],
-      consentAt: now,
-      expiresAt: new Date(now.getTime() + JOB_TTL_MS),
-    });
-    return { ok: true, jobId: job.id };
+    // Checks the balance AND the credits held by this user's other running jobs, under a per-user lock.
+    const created = await repo.createTryOnJobIfAffordable(
+      {
+        userId: input.userId,
+        personImageKey: input.personImageKey,
+        productImageKey: input.productImageKey,
+        viewCount,
+        consentAt: now,
+        expiresAt: new Date(now.getTime() + JOB_TTL_MS),
+        ...input.storefront,
+      },
+      creditsForViewCount(viewCount)
+    );
+    if (!created.ok) return { ok: false, reason: 'INSUFFICIENT_CREDITS' };
+    return { ok: true, jobId: created.job.id };
   }
 
   /** Runs generation for a queued job. Never throws; failures mark the job failed without charging. */
@@ -263,32 +306,16 @@ export class TryOnService {
 
   static async getStatus(jobId: string, userId: number): Promise<TryOnStatusResult | null> {
     const job = await repo.findTryOnJobForUser(jobId, userId);
-    if (!job) return null;
+    return job ? buildStatus(job) : null;
+  }
 
-    const staleBefore = new Date(Date.now() - STALE_JOB_MS);
-
-    if (job.status === 'DONE' && job.resultImageKey) {
-      const [resultUrl, sideUrl, backUrl] = await Promise.all([
-        signedUrl(job.resultImageKey),
-        signedUrlOrUndefined(job.sideImageKey),
-        signedUrlOrUndefined(job.backImageKey),
-      ]);
-      // A crashed worker leaves extras unsettled forever: stop reporting them as pending once the job is stale.
-      const extrasPending = job.viewCount > VIEW_COUNT.single && !job.extrasSettledAt && job.updatedAt >= staleBefore;
-      return {
-        status: 'done',
-        resultUrl,
-        ...(sideUrl ? { sideUrl } : {}),
-        ...(backUrl ? { backUrl } : {}),
-        viewCount: job.viewCount,
-        extrasPending,
-      };
-    }
-    if (job.status === 'FAILED') return { status: 'failed', error: failureMessage(job.error) };
-
-    if (job.updatedAt < staleBefore && (await repo.failStaleJob(job.id, staleBefore, GENERIC_FAILURE))) {
-      return { status: 'failed', error: GENERIC_FAILURE };
-    }
-    return { status: job.status === 'QUEUED' ? 'queued' : 'processing' };
+  /** Storefront shoppers can only read jobs their own session started on that shop. */
+  static async getStatusForSession(
+    jobId: string,
+    shopId: string,
+    sessionId: string
+  ): Promise<TryOnStatusResult | null> {
+    const job = await repo.findTryOnJobForSession(jobId, shopId, sessionId);
+    return job ? buildStatus(job) : null;
   }
 }

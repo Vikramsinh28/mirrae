@@ -84,16 +84,36 @@ async function askJson<T>(
   return parser.parse(JSON.parse(text ?? 'null'));
 }
 
+function personProblemOf(person: z.infer<typeof personSchema>): PhotoProblem | null {
+  if (person.personCount === 0 || !person.isPhotoOfRealPerson) return 'NO_PERSON';
+  if (person.personCount > 1) return 'MULTIPLE_PEOPLE';
+  if (!person.torsoVisible) return 'PERSON_TOO_SMALL';
+  return null;
+}
+
+const askAboutPerson = (image: { base64: string; contentType: string }) =>
+  askJson(
+    'You are validating a photo for a virtual clothing try-on. Describe only what is visible about the people in it.',
+    image,
+    PERSON_RESPONSE_SCHEMA,
+    personSchema
+  );
+
+/** Checks only the shopper photo (used right after upload, so the shopper hears about a bad photo at once). */
+export async function findPersonProblem(image: { base64: string; contentType: string }): Promise<PhotoProblem | null> {
+  try {
+    return personProblemOf(await askAboutPerson(image));
+  } catch (error) {
+    console.warn('Photo pre-check unavailable, continuing without it', error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
 /** The first problem found (person photo first), or null when both photos look usable. */
 export async function findPhotoProblem(input: PhotoCheckInput): Promise<PhotoProblem | null> {
   try {
     const [person, garment] = await Promise.all([
-      askJson(
-        'You are validating a photo for a virtual clothing try-on. Describe only what is visible about the people in it.',
-        { base64: input.personBase64, contentType: input.personContentType },
-        PERSON_RESPONSE_SCHEMA,
-        personSchema
-      ),
+      askAboutPerson({ base64: input.personBase64, contentType: input.personContentType }),
       askJson(
         'You are validating a product photo for a virtual clothing try-on. Describe only what the main subject is.',
         { base64: input.garmentBase64, contentType: input.garmentContentType },
@@ -102,11 +122,7 @@ export async function findPhotoProblem(input: PhotoCheckInput): Promise<PhotoPro
       ),
     ]);
 
-    if (person.personCount === 0 || !person.isPhotoOfRealPerson) return 'NO_PERSON';
-    if (person.personCount > 1) return 'MULTIPLE_PEOPLE';
-    if (!person.torsoVisible) return 'PERSON_TOO_SMALL';
-    if (!garment.showsClothingItem) return 'NOT_CLOTHING';
-    return null;
+    return personProblemOf(person) ?? (garment.showsClothingItem ? null : 'NOT_CLOTHING');
   } catch (error) {
     console.warn('Photo pre-check unavailable, continuing without it', error instanceof Error ? error.message : error);
     return null;
