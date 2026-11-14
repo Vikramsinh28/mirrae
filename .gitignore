@@ -45,3 +45,8 @@ next-env.d.ts
 src/lib/prisma/generated
 
 .pnpm-store
+
+# Built by scripts/build-widget.mjs from src/widget
+public/widget.js
+# Temporary files for local widget checks
+public/__test-*

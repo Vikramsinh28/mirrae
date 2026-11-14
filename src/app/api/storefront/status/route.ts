@@ -1,4 +1,4 @@
-import { storefrontFailure, storefrontJson, STOREFRONT_TOKEN_HEADER } from '@/lib/storefront/http';
+import { requestOrigin, storefrontFailure, storefrontJson, STOREFRONT_TOKEN_HEADER } from '@/lib/storefront/http';
 import { StorefrontService } from '@/services/internal/storefront';
 import { storefrontStatusQuerySchema } from '@/validations/storefront';
 import { NextRequest } from 'next/server';
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
     const result = await StorefrontService.getStatus({
       token,
-      origin: request.headers.get('origin') ?? '',
+      origin: requestOrigin(request),
       jobId: parsed.data.jobId,
     });
     if (!result.ok) return storefrontFailure(request, result);

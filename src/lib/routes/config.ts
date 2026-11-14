@@ -26,6 +26,10 @@ export const ALL_ROUTES: RouteConfig[] = [
   // Public webhooks and auth
   { path: '/api/webhooks/stripe', isPublic: true },
 
+  // Embeddable widget script (built from src/widget) and its local demo page
+  { path: '/widget.js', isPublic: true },
+  { path: '/widget-demo.html', isPublic: true },
+
   // Anonymous storefront API used by the embeddable widget (shoppers have no account).
   // Protected by a signed session token, the shop's allowed origins, rate limits and per-shop caps.
   { path: '/api/storefront/session', isPublic: true },

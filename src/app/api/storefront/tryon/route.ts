@@ -1,4 +1,4 @@
-import { clientIp, storefrontFailure, storefrontJson, STOREFRONT_TOKEN_HEADER } from '@/lib/storefront/http';
+import { clientIp, requestOrigin, storefrontFailure, storefrontJson, STOREFRONT_TOKEN_HEADER } from '@/lib/storefront/http';
 import { StorefrontService } from '@/services/internal/storefront';
 import { TryOnService } from '@/services/internal/tryon';
 import { storefrontTryOnSchema } from '@/validations/storefront';
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
     const result = await StorefrontService.startTryOn({
       token,
-      origin: request.headers.get('origin') ?? '',
+      origin: requestOrigin(request),
       ip: clientIp(request),
       ...parsed.data,
     });

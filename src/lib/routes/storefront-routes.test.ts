@@ -8,6 +8,13 @@ const STOREFRONT_PATHS = ['/api/storefront/session', '/api/storefront/photo', '/
 const request = (path: string, method: string, origin = 'https://www.example.com') =>
   new NextRequest(`http://localhost${path}`, { method, headers: origin ? { origin } : {} });
 
+describe('widget files in the route config', () => {
+  test.each(['/widget.js', '/widget-demo.html'])('%s is registered and public so a merchant page can load it', path => {
+    expect(isRouteConfigured(path)).toBe(true);
+    expect(isPublicRoute(request(path, 'GET'))).toBe(true);
+  });
+});
+
 describe('storefront routes in the route config', () => {
   test.each(STOREFRONT_PATHS)('%s is registered and public (shoppers have no account)', path => {
     expect(isRouteConfigured(path)).toBe(true);

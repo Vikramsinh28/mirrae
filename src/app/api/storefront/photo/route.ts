@@ -1,5 +1,6 @@
 import {
   clientIp,
+  requestOrigin,
   MAX_PHOTO_BYTES,
   readBodyCapped,
   storefrontFailure,
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
 
     const result = await StorefrontService.uploadPhoto({
       token,
-      origin: request.headers.get('origin') ?? '',
+      origin: requestOrigin(request),
       ip: clientIp(request),
       bytes,
     });

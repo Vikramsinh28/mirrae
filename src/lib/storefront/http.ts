@@ -26,6 +26,18 @@ const FAILURES: Record<string, { status: number; message: string }> = {
   MISSING_TOKEN: { status: 401, message: 'Your session expired. Please reload the page.' },
 };
 
+/**
+ * The page origin that made the request. Browsers always send Origin on cross-origin requests (every real
+ * merchant site) but omit it on same-origin GETs (our own demo page). Sec-Fetch-Site cannot be forged by page
+ * scripts, so "same-origin" with no Origin means the request came from our own site. Anything else with no
+ * Origin is unknown and gets refused by the service.
+ */
+export function requestOrigin(request: NextRequest): string {
+  const origin = request.headers.get('origin');
+  if (origin) return origin;
+  return request.headers.get('sec-fetch-site') === 'same-origin' ? request.nextUrl.origin : '';
+}
+
 /** The first address in X-Forwarded-For (set by the reverse proxy), else X-Real-IP, else "unknown". */
 export function clientIp(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();

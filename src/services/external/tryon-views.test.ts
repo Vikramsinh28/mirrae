@@ -74,10 +74,56 @@ describe('generateExtraView (Gemini image editing)', () => {
   test('throws TryOnProviderError on a 429 rate limit without leaking the body', async () => {
     fetchSpy.mockResolvedValue(json({ error: { message: 'quota details' } }, 429));
 
-    const error = await generateExtraView({ ...input, view: 'side' }).catch(e => e);
+    const error = await generateExtraView({ ...input, view: 'side' }, { retryDelaysMs: [] }).catch(e => e);
 
     expect(error).toBeInstanceOf(TryOnProviderError);
     expect(error.message).toBe('Try-on provider returned 429');
+    expect(error.message).not.toContain('quota');
+  });
+
+  describe('retries when the provider says it is rate limited (new projects have a low Gemini quota)', () => {
+    const rateLimited = () => json({ error: { message: 'quota details' } }, 429);
+
+    test('succeeds when a retry gets through, waiting between attempts', async () => {
+      const sleeps: number[] = [];
+      fetchSpy.mockResolvedValueOnce(rateLimited()).mockResolvedValueOnce(rateLimited()).mockResolvedValueOnce(withImage());
+
+      const result = await generateExtraView(
+        { ...input, view: 'back' },
+        { retryDelaysMs: [3000, 6000], sleep: async ms => void sleeps.push(ms) }
+      );
+
+      expect(Array.from(result.bytes)).toEqual([5, 6, 7]);
+      expect(fetchSpy).toHaveBeenCalledTimes(3);
+      expect(sleeps).toEqual([3000, 6000]);
+    });
+
+    test('gives up after the last retry and reports the rate limit', async () => {
+      fetchSpy.mockImplementation(async () => rateLimited());
+
+      await expect(
+        generateExtraView({ ...input, view: 'back' }, { retryDelaysMs: [1, 1], sleep: async () => undefined })
+      ).rejects.toMatchObject({ status: 429 });
+      expect(fetchSpy).toHaveBeenCalledTimes(3);
+    });
+
+    test.each([403, 500, 503])('does not retry a %i, only rate limits', async status => {
+      fetchSpy.mockImplementation(async () => json({ error: {} }, status));
+
+      await expect(
+        generateExtraView({ ...input, view: 'back' }, { retryDelaysMs: [1, 1], sleep: async () => undefined })
+      ).rejects.toMatchObject({ status });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    test('does not retry a response that simply has no image', async () => {
+      fetchSpy.mockImplementation(async () => json({ candidates: [{ content: { parts: [{ text: 'no' }] } }] }));
+
+      await expect(
+        generateExtraView({ ...input, view: 'back' }, { retryDelaysMs: [1, 1], sleep: async () => undefined })
+      ).rejects.toBeInstanceOf(TryOnProviderError);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
   });
 
   test('maps a timeout to a timeout error', async () => {

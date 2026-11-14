@@ -13,7 +13,11 @@ const DEFAULT_LOCATION = 'us-central1';
 const CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
 
 export class TryOnProviderError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    /** HTTP status of the provider answer, when there was one (429 means rate limited). */
+    readonly status?: number
+  ) {
     super(message);
     this.name = 'TryOnProviderError';
   }
@@ -79,7 +83,7 @@ export async function vertexPost(url: string, body: unknown, timeoutMs: number):
 
   if (!response.ok) {
     console.error('Try-on provider error', response.status);
-    throw new TryOnProviderError(`Try-on provider returned ${response.status}`);
+    throw new TryOnProviderError(`Try-on provider returned ${response.status}`, response.status);
   }
   return response.json().catch(() => null);
 }

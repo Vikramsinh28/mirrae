@@ -1,4 +1,4 @@
-import { clientIp, storefrontFailure, storefrontJson } from '@/lib/storefront/http';
+import { clientIp, requestOrigin, storefrontFailure, storefrontJson } from '@/lib/storefront/http';
 import { StorefrontService } from '@/services/internal/storefront';
 import { storefrontSessionSchema } from '@/validations/storefront';
 import { NextRequest } from 'next/server';
@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
 
     const result = await StorefrontService.openSession({
       publicKey: parsed.data.publicKey,
-      origin: request.headers.get('origin') ?? '',
+      origin: requestOrigin(request),
       ip: clientIp(request),
     });
     if (!result.ok) return storefrontFailure(request, result);

@@ -56,9 +56,21 @@ export interface ExtraViewInput {
   garmentContentType: string;
 }
 
-export async function generateExtraView(
+const RATE_LIMITED_STATUS = 429;
+// A new project's Gemini quota is low and extra views run in parallel, so a 429 is common: wait and retry.
+const DEFAULT_RETRY_DELAYS_MS = [4_000, 8_000];
+const defaultSleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
+export interface ExtraViewOptions {
+  timeoutMs?: number;
+  /** Waits before each retry after a 429; empty means never retry. */
+  retryDelaysMs?: readonly number[];
+  sleep?: (ms: number) => Promise<void>;
+}
+
+async function requestExtraView(
   { view, frontImage, garmentBase64, garmentContentType }: ExtraViewInput,
-  { timeoutMs = DEFAULT_TIMEOUT_MS }: { timeoutMs?: number } = {}
+  timeoutMs: number
 ): Promise<TryOnImage> {
   const body = await vertexPost(
     vertexModelUrl(VIEWS_MODEL_ID, 'generateContent', VIEWS_LOCATION),
@@ -85,4 +97,20 @@ export async function generateExtraView(
   if (!image) throw new TryOnProviderError('Try-on provider returned no image for this view');
 
   return { bytes: new Uint8Array(Buffer.from(image.data, 'base64')), contentType: image.mimeType };
+}
+
+export async function generateExtraView(
+  input: ExtraViewInput,
+  { timeoutMs = DEFAULT_TIMEOUT_MS, retryDelaysMs = DEFAULT_RETRY_DELAYS_MS, sleep = defaultSleep }: ExtraViewOptions = {}
+): Promise<TryOnImage> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await requestExtraView(input, timeoutMs);
+    } catch (error) {
+      const delay = retryDelaysMs.at(attempt);
+      const rateLimited = error instanceof TryOnProviderError && error.status === RATE_LIMITED_STATUS;
+      if (!rateLimited || delay === undefined) throw error;
+      await sleep(delay);
+    }
+  }
 }
