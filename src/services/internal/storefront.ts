@@ -4,9 +4,10 @@ import { startOfUtcDay } from '@/lib/time';
 import { fetchProductImage, ProductImageError } from '@/lib/security/product-image';
 import { storefrontLimits } from '@/lib/storefront/limits';
 import { signStorefrontToken, verifyStorefrontToken, type StorefrontSession } from '@/lib/storefront/token';
-import type { Shop } from '@/lib/prisma/generated/client';
+import type { Shop, StorefrontEventType } from '@/lib/prisma/generated/client';
 import { putObject } from '@/services/external/aws/s3';
 import { findPersonProblem, type PhotoProblem } from '@/services/external/tryon-check';
+import * as eventRepo from '@/services/repositories/storefront-event';
 import * as shopRepo from '@/services/repositories/shop';
 import { PHOTO_PROBLEM_MESSAGES, TryOnService, type TryOnStatusResult, type TryOnViews } from './tryon';
 import { prepareTryOnImage } from './tryon-image';
@@ -162,6 +163,22 @@ export class StorefrontService {
     if (created.ok) return { ok: true, jobId: created.jobId };
 
     return { ok: false, reason: created.reason === 'INVALID_KEY' ? 'INVALID_PHOTO' : created.reason };
+  }
+
+  /** Notes that a shopper opened the widget, saw a result, added to cart or shared. Anonymous: only the session id is kept. */
+  static async recordEvent(input: {
+    token: string;
+    origin: string;
+    type: StorefrontEventType;
+  }): Promise<{ ok: true } | Rejected<StorefrontFailure>> {
+    const auth = await authorize(input.token, input.origin);
+    if (!auth.ok) return auth;
+
+    const limited = rateLimited(storefrontLimits.eventBySession.check(auth.session.sessionId));
+    if (limited) return limited;
+
+    await eventRepo.createStorefrontEvent({ shopId: auth.shop.id, sessionId: auth.session.sessionId, type: input.type });
+    return { ok: true };
   }
 
   /** The caller starts processing (after the response is sent) with TryOnService.processJob(jobId). */

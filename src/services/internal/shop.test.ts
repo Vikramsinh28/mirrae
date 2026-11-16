@@ -1,11 +1,14 @@
 import { generatePublicKey } from '@/lib/storefront/public-key';
 import * as repo from '@/services/repositories/shop';
+import * as eventRepo from '@/services/repositories/storefront-event';
 import { MAX_SHOPS_PER_OWNER, ShopService } from './shop';
 
 jest.mock('@/services/repositories/shop');
+jest.mock('@/services/repositories/storefront-event');
 jest.mock('@/lib/storefront/public-key', () => ({ generatePublicKey: jest.fn() }));
 
 const r = repo as jest.Mocked<typeof repo>;
+const events = eventRepo as jest.Mocked<typeof eventRepo>;
 const keyMock = generatePublicKey as jest.Mock;
 
 const OWNER = 7;
@@ -232,6 +235,7 @@ describe('ShopService', () => {
       jest.useFakeTimers().setSystemTime(now);
       r.findShopByIdForOwner.mockResolvedValue(shop as never);
       r.countShopJobsSince.mockResolvedValue(9);
+      events.countSessionsByEventType.mockResolvedValue({ WIDGET_OPENED: 40, RESULT_VIEWED: 20, ADD_TO_CART: 5, SHARED: 3 });
       r.getShopUsage.mockResolvedValue({
         statusCounts: { QUEUED: 1, PROCESSING: 1, DONE: 20, FAILED: 4 },
         failureCodes: [
@@ -244,6 +248,20 @@ describe('ShopService', () => {
     });
 
     afterEach(() => jest.useRealTimers());
+
+    test('reports conversion as counts of shopper sessions, with add-to-cart as a share of those who saw a result', async () => {
+      const result = await ShopService.usage(OWNER, shop.id, 30);
+
+      expect(result.ok && result.usage.conversion).toEqual({ opened: 40, sawResult: 20, addedToCart: 5, shared: 3, addToCartRate: 0.25 });
+    });
+
+    test('has no add-to-cart rate until someone has seen a result', async () => {
+      events.countSessionsByEventType.mockResolvedValue({ WIDGET_OPENED: 3, RESULT_VIEWED: 0, ADD_TO_CART: 0, SHARED: 0 });
+
+      const result = await ShopService.usage(OWNER, shop.id, 30);
+
+      expect(result.ok && result.usage.conversion.addToCartRate).toBeNull();
+    });
 
     test('summarises the window: totals by outcome, credits spent, today against the cap', async () => {
       const result = await ShopService.usage(OWNER, shop.id, 30);

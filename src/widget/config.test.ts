@@ -20,6 +20,11 @@ describe('readConfig', () => {
     expect(config).toMatchObject({ views: 'multi', color: '#111111', locale: 'en', label: undefined, target: undefined });
   });
 
+  test('reads the merchant\'s add-to-cart selector, and leaves it unset otherwise', () => {
+    expect(read({ cartButton: ' #buy ' }).cartButton).toBe('#buy');
+    expect(read().cartButton).toBeUndefined();
+  });
+
   test.each([undefined, '', '   ', 'sk_live_secret', 'abc'])('refuses a missing or wrong shop key %p (a secret key must never be embedded)', key => {
     expect(() => readConfig({ src: SCRIPT_SRC, dataset: { shopKey: key } }, { pageUrl: PAGE })).toThrow(ConfigError);
   });

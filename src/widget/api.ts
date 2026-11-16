@@ -28,6 +28,8 @@ export interface DoneStatus {
   extrasPending: boolean;
 }
 
+export type WidgetEventType = 'WIDGET_OPENED' | 'RESULT_VIEWED' | 'ADD_TO_CART' | 'SHARED';
+
 export type JobProgress = { status: 'queued' | 'processing' } | DoneStatus;
 
 export interface ApiConfig {
@@ -143,6 +145,22 @@ export function createApi({ apiBase, publicKey }: ApiConfig, deps: ApiDeps = def
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...input, consent: true }),
       })) as { jobId: string };
+    },
+
+    /**
+     * Tells Mirrae what the shopper did, for the merchant's conversion numbers. Fire and forget: it never
+     * throws and never delays the shopper, because a lost counter must not break a try-on.
+     */
+    async sendEvent(type: WidgetEventType): Promise<void> {
+      try {
+        await call('/api/storefront/event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type }),
+        });
+      } catch {
+        // Deliberately ignored, see above.
+      }
     },
 
     /** Resolves when every view is ready, or with what is ready once the side/back views take too long. */

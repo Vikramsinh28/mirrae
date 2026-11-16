@@ -153,9 +153,32 @@ model Shop {
 
   owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   tryOnJobs TryOnJob[]
+  events    StorefrontEvent[]
 
   @@unique([platform, domain])
   @@index([ownerId])
+}
+
+enum StorefrontEventType {
+  WIDGET_OPENED
+  RESULT_VIEWED
+  ADD_TO_CART
+  SHARED
+}
+
+// What shoppers did in the widget, for the merchant's conversion numbers. No personal data: the session id is
+// an anonymous random id and no photo, IP or user agent is stored.
+model StorefrontEvent {
+  id        String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  shopId    String              @db.Uuid
+  sessionId String
+  jobId     String?             @db.Uuid
+  type      StorefrontEventType
+  createdAt DateTime            @default(now())
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, type, createdAt])
 }
 
 enum TryOnStatus {

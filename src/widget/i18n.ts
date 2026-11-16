@@ -23,6 +23,8 @@ export interface Strings {
   side: string;
   back: string;
   tryAnother: string;
+  addToCart: string;
+  saveImage: string;
   close: string;
   disclaimer: string;
   errors: {
@@ -60,6 +62,8 @@ export const STRINGS: Record<Locale, Strings> = {
     side: 'Side',
     back: 'Back',
     tryAnother: 'Try another photo',
+    addToCart: 'Add to cart',
+    saveImage: 'Save or share',
     close: 'Close',
     disclaimer: 'A visual preview, not a size guarantee. The back view may be an estimate.',
     errors: {
@@ -94,6 +98,8 @@ export const STRINGS: Record<Locale, Strings> = {
     side: 'साइड',
     back: 'पीछे',
     tryAnother: 'दूसरी फ़ोटो से आज़माएँ',
+    addToCart: 'कार्ट में जोड़ें',
+    saveImage: 'सेव या शेयर करें',
     close: 'बंद करें',
     disclaimer: 'यह सिर्फ़ एक विज़ुअल अंदाज़ा है, साइज़ की गारंटी नहीं। पीछे का व्यू अनुमान पर बना हो सकता है।',
     errors: {
@@ -128,6 +134,8 @@ export const STRINGS: Record<Locale, Strings> = {
     side: 'جانبي',
     back: 'خلفي',
     tryAnother: 'جرّب بصورة أخرى',
+    addToCart: 'أضف إلى السلة',
+    saveImage: 'حفظ أو مشاركة',
     close: 'إغلاق',
     disclaimer: 'هذه معاينة بصرية فقط وليست ضماناً للمقاس. قد يكون العرض الخلفي تقديرياً.',
     errors: {

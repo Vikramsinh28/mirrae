@@ -18,6 +18,8 @@ export interface WidgetConfig {
   /** CSS selector of the element the button is placed in; floating button when absent. */
   target?: string;
   productImage?: string;
+  /** CSS selector of the store's own add-to-cart button; common ones (Shopify) are detected when absent. */
+  cartButton?: string;
   locale: Locale;
 }
 
@@ -89,6 +91,7 @@ export function readConfig(script: ScriptLike, { pageUrl, pageLang }: PageInfo):
     label,
     target: clean(dataset.target),
     productImage: resolveUrl(dataset.productImage, pageUrl),
+    cartButton: clean(dataset.cartButton),
     locale: resolveLocale(dataset.lang, pageLang),
   };
 }

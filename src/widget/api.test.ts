@@ -242,3 +242,30 @@ describe('waitForResult', () => {
     expect(fetchMock.mock.calls.filter(call => urlOf(call).includes('/status'))).toHaveLength(0);
   });
 });
+
+describe('sendEvent', () => {
+  test('posts the event type with the session token', async () => {
+    const { api, fetchMock } = setup();
+    fetchMock.mockResolvedValueOnce(sessionOk()).mockResolvedValueOnce(ok({ recorded: true }, 202));
+
+    await api.sendEvent('ADD_TO_CART');
+
+    expect(urlOf(fetchMock.mock.calls[1])).toBe('https://app.mirrae.test/api/storefront/event');
+    expect(JSON.parse(String(initOf(fetchMock.mock.calls[1]).body))).toEqual({ type: 'ADD_TO_CART' });
+    expect(initOf(fetchMock.mock.calls[1]).headers['X-Storefront-Token']).toBe('tok-1');
+  });
+
+  test('never throws when the network or the server fails', async () => {
+    const { api, fetchMock } = setup();
+    fetchMock.mockRejectedValue(new TypeError('offline'));
+
+    await expect(api.sendEvent('SHARED')).resolves.toBeUndefined();
+  });
+
+  test('never throws when the server refuses the event', async () => {
+    const { api, fetchMock } = setup();
+    fetchMock.mockResolvedValueOnce(sessionOk()).mockResolvedValueOnce(fail(429, 'RATE_LIMITED'));
+
+    await expect(api.sendEvent('RESULT_VIEWED')).resolves.toBeUndefined();
+  });
+});

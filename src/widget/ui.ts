@@ -1,7 +1,9 @@
 import { createApi, WidgetApiError, type Api, type DoneStatus } from './api';
+import { findCartButton, type CartButtonLike } from './cart';
 import type { WidgetConfig } from './config';
 import { directionOf, errorText, STRINGS, type Strings } from './i18n';
 import { findProductImage } from './product-image';
+import { shareImage } from './share';
 import { BUTTON_CSS, MODAL_CSS } from './styles';
 
 type Step = 'photo' | 'working' | 'result';
@@ -126,7 +128,9 @@ export function mountWidget(config: WidgetConfig): { open: () => void } {
       const final = await api.waitForResult(jobId, {
         signal: controller.signal,
         onUpdate: progress => {
-          if (progress.status === 'done') setState({ step: 'result', result: progress });
+          if (progress.status !== 'done') return;
+          if (state.step !== 'result') void api.sendEvent('RESULT_VIEWED');
+          setState({ step: 'result', result: progress });
         },
       });
       setState({ step: 'result', result: final });
@@ -154,6 +158,20 @@ export function mountWidget(config: WidgetConfig): { open: () => void } {
     modal = null;
     state = INITIAL_STATE;
     if (opener instanceof HTMLElement) opener.focus();
+  }
+
+  function addToCart(button: CartButtonLike) {
+    emit('add-to-cart', {});
+    void api.sendEvent('ADD_TO_CART');
+    closeModal();
+    // Close first: the store may open its own cart drawer, which the overlay must not cover.
+    button.click();
+  }
+
+  async function saveCurrent(url: string, view: ViewName) {
+    const outcome = await shareImage(url);
+    emit('share', { view, outcome });
+    if (outcome === 'shared' || outcome === 'downloaded') void api.sendEvent('SHARED');
   }
 
   function photoStep(): Child[] {
@@ -215,6 +233,8 @@ export function mountWidget(config: WidgetConfig): { open: () => void } {
     // A view that never arrived is hidden once nothing more is pending.
     const shown = views.filter(view => view.name === 'front' || (multi && (view.url || result.extrasPending)));
     const current = shown.find(view => view.name === state.view && view.url) ?? shown[0];
+    // Looked up when the result appears so a product with no usable button simply gets no cart action.
+    const cartButton = findCartButton(document, config.cartButton);
 
     return [
       el('div', { class: 'stage' }, el('img', { src: current.url ?? '', alt: `${strings.title}: ${current.label}` })),
@@ -234,11 +254,14 @@ export function mountWidget(config: WidgetConfig): { open: () => void } {
         : null,
       result.extrasPending ? el('p', { class: 'note', role: 'status' }, strings.sideBackLoading) : null,
       el('p', { class: 'fine' }, strings.disclaimer),
+      cartButton
+        ? el('button', { type: 'button', class: 'go', onclick: () => addToCart(cartButton) }, strings.addToCart)
+        : null,
       el(
         'div',
         { class: 'row' },
-        el('button', { type: 'button', class: 'ghost', onclick: () => { revokePreview(); setState({ ...INITIAL_STATE, consent: state.consent }); } }, strings.tryAnother),
-        el('button', { type: 'button', class: 'ghost', onclick: closeModal }, strings.close)
+        el('button', { type: 'button', class: 'ghost', onclick: () => void saveCurrent(current.url ?? result.resultUrl, current.name) }, strings.saveImage),
+        el('button', { type: 'button', class: 'ghost', onclick: () => { revokePreview(); setState({ ...INITIAL_STATE, consent: state.consent }); } }, strings.tryAnother)
       ),
     ];
   }
@@ -310,6 +333,7 @@ export function mountWidget(config: WidgetConfig): { open: () => void } {
     render();
     root.querySelector<HTMLElement>('.pick, .x')?.focus();
     emit('open', {});
+    void api.sendEvent('WIDGET_OPENED');
   }
 
   // The launcher button

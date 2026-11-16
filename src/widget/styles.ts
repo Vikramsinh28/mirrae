@@ -67,7 +67,7 @@ export const MODAL_CSS = `
 @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2.4s; } }
 .working { display: grid; place-items: center; gap: 14px; padding: 40px 8px; text-align: center; color: #333; }
 .stage {
-  position: relative; height: min(50dvh, 480px); aspect-ratio: 3 / 4; max-width: 100%; margin: 0 auto;
+  position: relative; height: min(42dvh, 420px); aspect-ratio: 3 / 4; max-width: 100%; margin: 0 auto;
   background: #f3f3f3; border-radius: 12px; overflow: hidden;
 }
 .stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }

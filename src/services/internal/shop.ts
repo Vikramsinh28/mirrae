@@ -3,6 +3,7 @@ import type { Shop } from '@/lib/prisma/generated/client';
 import { generatePublicKey } from '@/lib/storefront/public-key';
 import { DAY_MS, startOfUtcDay } from '@/lib/time';
 import * as repo from '@/services/repositories/shop';
+import * as eventRepo from '@/services/repositories/storefront-event';
 import type { CreateShopInput, UpdateShopInput } from '@/validations/shop';
 
 /** A merchant's shops: creating them, changing their settings, and reading their usage. Everything is scoped to the owner. */
@@ -22,8 +23,18 @@ export interface ShopListItem extends ShopView {
   tryOnsLast7Days: number;
 }
 
+/** What shoppers did in the widget, counted in distinct shopper sessions. addToCartRate is null until someone saw a result. */
+export interface ShopConversion {
+  opened: number;
+  sawResult: number;
+  addedToCart: number;
+  shared: number;
+  addToCartRate: number | null;
+}
+
 export interface ShopUsage {
   days: number;
+  conversion: ShopConversion;
   jobs: { total: number; done: number; failed: number; inProgress: number };
   creditsSpent: number;
   failureReasons: { code: string; count: number }[];
@@ -149,9 +160,11 @@ export class ShopService {
     if (!shop) return { ok: false, reason: 'NOT_FOUND' };
 
     const now = new Date();
-    const [report, startedToday] = await Promise.all([
-      repo.getShopUsage(shop.id, new Date(now.getTime() - days * DAY_MS)),
+    const since = new Date(now.getTime() - days * DAY_MS);
+    const [report, startedToday, sessions] = await Promise.all([
+      repo.getShopUsage(shop.id, since),
       repo.countShopJobsSince(shop.id, startOfUtcDay(now)),
+      eventRepo.countSessionsByEventType(shop.id, since),
     ]);
 
     const count = (status: string) => report.statusCounts[status] ?? 0;
@@ -159,6 +172,15 @@ export class ShopService {
       ok: true,
       usage: {
         days,
+        conversion: {
+          opened: sessions.WIDGET_OPENED,
+          sawResult: sessions.RESULT_VIEWED,
+          addedToCart: sessions.ADD_TO_CART,
+          shared: sessions.SHARED,
+          // Only sessions that saw a result could add to cart because of it; never above 100%
+          addToCartRate:
+            sessions.RESULT_VIEWED === 0 ? null : Math.min(1, sessions.ADD_TO_CART / sessions.RESULT_VIEWED),
+        },
         jobs: {
           total: Object.values(report.statusCounts).reduce((sum, value) => sum + value, 0),
           done: count('DONE'),

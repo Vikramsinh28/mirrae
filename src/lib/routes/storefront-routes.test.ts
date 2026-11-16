@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { applyCorsHeaders, handleCorsPreflightRequest } from './cors';
 import { findMatchingRoute, isPublicRoute, isRouteConfigured } from './utils';
 
-const STOREFRONT_PATHS = ['/api/storefront/session', '/api/storefront/photo', '/api/storefront/tryon', '/api/storefront/status'];
+const STOREFRONT_PATHS = ['/api/storefront/session', '/api/storefront/photo', '/api/storefront/tryon', '/api/storefront/status', '/api/storefront/event'];
 
 const request = (path: string, method: string, origin = 'https://www.example.com') =>
   new NextRequest(`http://localhost${path}`, { method, headers: origin ? { origin } : {} });

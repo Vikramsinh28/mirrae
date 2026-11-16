@@ -17,3 +17,7 @@ export const storefrontTryOnSchema = z.object({
 export const storefrontStatusQuerySchema = z.object({
   jobId: z.string().uuid('jobId must be a valid id'),
 });
+
+export const storefrontEventSchema = z.object({
+  type: z.enum(['WIDGET_OPENED', 'RESULT_VIEWED', 'ADD_TO_CART', 'SHARED']),
+});

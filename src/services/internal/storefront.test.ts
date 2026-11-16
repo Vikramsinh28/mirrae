@@ -4,6 +4,7 @@ import { fetchProductImage, ProductImageError } from '@/lib/security/product-ima
 import { storefrontLimits } from '@/lib/storefront/limits';
 import { verifyStorefrontToken } from '@/lib/storefront/token';
 import * as shopRepo from '@/services/repositories/shop';
+import * as eventRepo from '@/services/repositories/storefront-event';
 import { StorefrontService } from './storefront';
 import { TryOnService } from './tryon';
 import { prepareTryOnImage } from './tryon-image';
@@ -23,10 +24,12 @@ jest.mock('@/lib/storefront/limits', () => {
       photoByIp: allow(),
       tryOnBySession: allow(),
       tryOnByIp: allow(),
+      eventBySession: allow(),
     },
   };
 });
 jest.mock('@/services/repositories/shop');
+jest.mock('@/services/repositories/storefront-event');
 jest.mock('./tryon', () => ({
   TryOnService: { createJob: jest.fn(), processJob: jest.fn(), getStatusForSession: jest.fn() },
   PHOTO_PROBLEM_MESSAGES: { NO_PERSON: 'We could not find a person in your photo.' },
@@ -36,6 +39,7 @@ jest.mock('./tryon-image', () => ({
   TryOnImageError: class extends Error {},
 }));
 
+const events = eventRepo as jest.Mocked<typeof eventRepo>;
 const shops = shopRepo as jest.Mocked<typeof shopRepo>;
 const tryOn = TryOnService as jest.Mocked<typeof TryOnService>;
 const limits = storefrontLimits as unknown as Record<string, { check: jest.Mock }>;
@@ -339,6 +343,44 @@ describe('StorefrontService', () => {
         ok: false,
         reason: 'NOT_FOUND',
       });
+    });
+  });
+
+  describe('recordEvent', () => {
+    test('stores the event for this shop and session, and nothing personal', async () => {
+      const { token } = await open();
+      const sessionId = verifyStorefrontToken(token)?.sessionId;
+
+      const result = await StorefrontService.recordEvent({ token, origin: ORIGIN, type: 'ADD_TO_CART' });
+
+      expect(result).toEqual({ ok: true });
+      expect(events.createStorefrontEvent).toHaveBeenCalledWith({ shopId: shop.id, sessionId, type: 'ADD_TO_CART' });
+    });
+
+    test('refuses a page that is not one of the shop\'s allowed origins', async () => {
+      const { token } = await open();
+
+      const result = await StorefrontService.recordEvent({ token, origin: 'https://evil.example', type: 'SHARED' });
+
+      expect(result).toMatchObject({ ok: false, reason: 'ORIGIN_NOT_ALLOWED' });
+      expect(events.createStorefrontEvent).not.toHaveBeenCalled();
+    });
+
+    test('refuses a forged token', async () => {
+      const result = await StorefrontService.recordEvent({ token: 'forged', origin: ORIGIN, type: 'SHARED' });
+
+      expect(result).toMatchObject({ ok: false, reason: 'INVALID_TOKEN' });
+      expect(events.createStorefrontEvent).not.toHaveBeenCalled();
+    });
+
+    test('rate limits a session that floods events', async () => {
+      const { token } = await open();
+      limits.eventBySession.check.mockReturnValue({ allowed: false, remaining: 0, retryAfterMs: 5000 });
+
+      const result = await StorefrontService.recordEvent({ token, origin: ORIGIN, type: 'RESULT_VIEWED' });
+
+      expect(result).toMatchObject({ ok: false, reason: 'RATE_LIMITED' });
+      expect(events.createStorefrontEvent).not.toHaveBeenCalled();
     });
   });
 });

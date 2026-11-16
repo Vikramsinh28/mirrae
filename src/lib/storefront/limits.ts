@@ -13,4 +13,5 @@ export const storefrontLimits = {
   photoByIp: createRateLimiter({ limit: 60, windowMs: HOUR_MS }),
   tryOnBySession: createRateLimiter({ limit: 5, windowMs: MINUTE_MS }),
   tryOnByIp: createRateLimiter({ limit: 30, windowMs: HOUR_MS }),
+  eventBySession: createRateLimiter({ limit: 30, windowMs: MINUTE_MS }),
 };

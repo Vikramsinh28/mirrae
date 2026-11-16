@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useShopUsage } from '@/hooks/useShops';
-import type { ShopUsage } from '@/services/api/shops';
+import type { ShopConversion, ShopUsage } from '@/services/api/shops';
 
 const RANGES = [7, 30, 90] as const;
 const FAILURE_LABELS: Record<string, string> = {
@@ -35,6 +35,27 @@ function Stat({ label, value, hint }: { label: string; value: string | number; h
   );
 }
 
+function ConversionSection({ conversion }: { conversion: ShopConversion }) {
+  const { opened, sawResult, addedToCart, shared, addToCartRate } = conversion;
+  const rate = addToCartRate === null ? '–' : `${Math.round(addToCartRate * 100)}%`;
+
+  return (
+    <div>
+      <p className="text-text mb-1.5 text-xs font-medium">What shoppers did</p>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat label="Opened try-on" value={opened} hint="shoppers" />
+        <Stat label="Saw a result" value={sawResult} hint="shoppers" />
+        <Stat label="Added to cart" value={addedToCart} hint={`${rate} of those who saw a result`} />
+        <Stat label="Saved or shared" value={shared} hint="shoppers" />
+      </div>
+      <p className="text-text-muted mt-1.5 text-[11px]">
+        Counted from the try-on window only. It shows how many shoppers added to cart after trying on; it does not prove the
+        try-on caused the sale.
+      </p>
+    </div>
+  );
+}
+
 function UsageDetails({ usage }: { usage: ShopUsage }) {
   const finished = usage.jobs.done + usage.jobs.failed;
   const successRate = finished === 0 ? '–' : `${Math.round((usage.jobs.done / finished) * 100)}%`;
@@ -47,6 +68,8 @@ function UsageDetails({ usage }: { usage: ShopUsage }) {
         <Stat label="Credits used" value={usage.creditsSpent} />
         <Stat label="Today" value={`${usage.startedToday} / ${usage.dailyTryOnCap}`} hint="daily limit" />
       </div>
+
+      <ConversionSection conversion={usage.conversion} />
 
       {usage.failureReasons.length > 0 && (
         <div>

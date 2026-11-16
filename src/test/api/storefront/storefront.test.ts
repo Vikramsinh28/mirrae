@@ -8,7 +8,7 @@ import { StorefrontService } from '@/services/internal/storefront';
 import { TryOnService } from '@/services/internal/tryon';
 
 jest.mock('@/services/internal/storefront', () => ({
-  StorefrontService: { openSession: jest.fn(), uploadPhoto: jest.fn(), startTryOn: jest.fn(), getStatus: jest.fn() },
+  StorefrontService: { openSession: jest.fn(), uploadPhoto: jest.fn(), startTryOn: jest.fn(), getStatus: jest.fn(), recordEvent: jest.fn() },
 }));
 jest.mock('@/services/internal/tryon', () => ({ TryOnService: { processJob: jest.fn() } }));
 jest.mock('next/server', () => ({ ...jest.requireActual('next/server'), after: jest.fn() }));
@@ -294,6 +294,41 @@ describe('Storefront API routes', () => {
     ] as const)('maps %s to HTTP %i', async (reason, status) => {
       service.getStatus.mockResolvedValue({ ok: false, reason });
       expect((await get(`?jobId=${JOB_ID}`)).status).toBe(status);
+    });
+  });
+
+  describe('POST /api/storefront/event', () => {
+    const post = async (body: unknown, headers: Record<string, string> = { 'x-storefront-token': TOKEN }) => {
+      const { POST } = await import('@/app/api/storefront/event/route');
+      return POST(json('http://localhost/api/storefront/event', 'POST', body, headers));
+    };
+
+    test('records a known event type', async () => {
+      service.recordEvent.mockResolvedValue({ ok: true });
+
+      const response = await post({ type: 'ADD_TO_CART' });
+
+      expect(response.status).toBe(202);
+      expect(service.recordEvent).toHaveBeenCalledWith({ token: TOKEN, origin: ORIGIN, type: 'ADD_TO_CART' });
+    });
+
+    test('needs the session token header', async () => {
+      expect((await post({ type: 'SHARED' }, {})).status).toBe(401);
+      expect(service.recordEvent).not.toHaveBeenCalled();
+    });
+
+    test.each([{ type: 'DELETE_EVERYTHING' }, {}, null])('rejects an unknown event %p', async body => {
+      expect((await post(body)).status).toBe(400);
+      expect(service.recordEvent).not.toHaveBeenCalled();
+    });
+
+    test.each([
+      ['INVALID_TOKEN', 401],
+      ['ORIGIN_NOT_ALLOWED', 403],
+      ['RATE_LIMITED', 429],
+    ] as const)('maps %s to HTTP %i', async (reason, status) => {
+      service.recordEvent.mockResolvedValue({ ok: false, reason });
+      expect((await post({ type: 'SHARED' })).status).toBe(status);
     });
   });
 });

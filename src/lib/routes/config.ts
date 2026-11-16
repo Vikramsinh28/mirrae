@@ -37,6 +37,7 @@ export const ALL_ROUTES: RouteConfig[] = [
   { path: '/api/storefront/photo', isPublic: true },
   { path: '/api/storefront/tryon', isPublic: true },
   { path: '/api/storefront/status', isPublic: true },
+  { path: '/api/storefront/event', isPublic: true },
   { path: '/api/auth/logout', isPublic: true },
   { path: '/api/auth', isPublic: true },
   { path: '/api/auth/google/verify', isPublic: true },

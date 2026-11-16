@@ -19,8 +19,17 @@ export interface ShopListItem extends Shop {
   tryOnsLast7Days: number;
 }
 
+export interface ShopConversion {
+  opened: number;
+  sawResult: number;
+  addedToCart: number;
+  shared: number;
+  addToCartRate: number | null;
+}
+
 export interface ShopUsage {
   days: number;
+  conversion: ShopConversion;
   jobs: { total: number; done: number; failed: number; inProgress: number };
   creditsSpent: number;
   failureReasons: { code: string; count: number }[];
