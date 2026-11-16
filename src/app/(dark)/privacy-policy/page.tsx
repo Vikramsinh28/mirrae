@@ -1,18 +1,19 @@
+import { siteConfig } from '@/app/siteConfig';
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy - Kostra',
+  title: 'Privacy Policy - Mirrae',
   description:
-    'Privacy Policy for Kostra - Modern Next.js SaaS Boilerplate. Learn how we collect, use, and protect your personal information.',
+    'Privacy Policy for Mirrae - Virtual try-on for online fashion stores. Learn how we collect, use, and protect your personal information.',
   openGraph: {
-    title: 'Privacy Policy - Kostra',
+    title: 'Privacy Policy - Mirrae',
     description:
-      'Privacy Policy for Kostra - Modern Next.js SaaS Boilerplate. Learn how we collect, use, and protect your personal information.',
+      'Privacy Policy for Mirrae - Virtual try-on for online fashion stores. Learn how we collect, use, and protect your personal information.',
     type: 'article',
-    url: 'https://kostra.io/privacy-policy',
+    url: `${siteConfig.url}/privacy-policy`,
   },
   alternates: {
-    canonical: 'https://kostra.io/privacy-policy',
+    canonical: `${siteConfig.url}/privacy-policy`,
   },
   robots: {
     index: true,
@@ -47,13 +48,13 @@ export default function PrivacyPolicyPage() {
             '@context': 'https://schema.org',
             '@type': 'WebPage',
             name: 'Privacy Policy',
-            description: 'Privacy Policy for Kostra - Modern Next.js SaaS Boilerplate',
-            url: 'https://kostra.io/privacy-policy',
+            description: 'Privacy Policy for Mirrae - Virtual try-on for online fashion stores',
+            url: `${siteConfig.url}/privacy-policy`,
             dateModified: lastUpdated,
             isPartOf: {
               '@type': 'WebSite',
-              name: 'Kostra',
-              url: 'https://kostra.io',
+              name: 'Mirrae',
+              url: siteConfig.url,
             },
             mainEntity: {
               '@type': 'Article',
@@ -62,8 +63,8 @@ export default function PrivacyPolicyPage() {
               dateModified: lastUpdated,
               author: {
                 '@type': 'Organization',
-                name: 'Kostra',
-                url: 'https://kostra.io',
+                name: 'Mirrae',
+                url: siteConfig.url,
               },
             },
           }),
@@ -95,10 +96,10 @@ export default function PrivacyPolicyPage() {
                   1. Introduction
                 </h2>
                 <p className="text-sm sm:text-base">
-                  At Kostra, we are committed to protecting your privacy and ensuring the security
+                  At Mirrae, we are committed to protecting your privacy and ensuring the security
                   of your personal information. This Privacy Policy explains how we collect, use,
-                  process, and protect your information when you use our Next.js SaaS boilerplate
-                  platform.
+                  process, and protect your information when you use our virtual try-on
+                  service.
                 </p>
               </section>
 
@@ -179,7 +180,7 @@ export default function PrivacyPolicyPage() {
                   <p className="text-sm sm:text-base">We use your information to:</p>
                   <ul className="list-disc space-y-2 pl-4 text-sm sm:pl-6 sm:text-base">
                     <li>
-                      Provide, maintain, and improve our SaaS boilerplate platform and services
+                      Provide, maintain, and improve our service
                     </li>
                     <li>Process and analyze your content to deliver platform functionality</li>
                     <li>Authenticate your identity and provide secure access to your account</li>
@@ -436,7 +437,8 @@ export default function PrivacyPolicyPage() {
                 </p>
                 <div className="mt-4 rounded-lg border border-border bg-background-light p-4 sm:p-6">
                   <p className="text-sm sm:text-base">
-                    <strong>Email:</strong> hi@kostra.io
+                    <strong>Contact:</strong>{' '}
+                    <a href="/contact" className="underline underline-offset-2">our contact page</a>
                   </p>
                 </div>
               </section>

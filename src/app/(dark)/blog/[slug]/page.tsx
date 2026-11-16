@@ -55,12 +55,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   if (!blog || !blog.published) {
     return {
-      title: 'Blog Post Not Found - Kostra',
+      title: 'Blog Post Not Found - Mirrae',
     };
   }
 
   return {
-    title: `${blog.title} - Kostra`,
+    title: `${blog.title} - Mirrae`,
     description: blog.content.replace(/<[^>]*>/g, '').substring(0, 160),
     openGraph: {
       title: blog.title,

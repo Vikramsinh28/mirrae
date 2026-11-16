@@ -9,10 +9,10 @@ import { notFound } from 'next/navigation';
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  title: 'Blog - Kostra',
+  title: 'Blog - Mirrae',
   description: 'Read our latest blog posts about Next.js, development, and best practices.',
   openGraph: {
-    title: 'Blog - Kostra',
+    title: 'Blog - Mirrae',
     description: 'Read our latest blog posts about Next.js, development, and best practices.',
     type: 'website',
   },

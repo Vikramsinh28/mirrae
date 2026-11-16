@@ -98,8 +98,8 @@ export default function ContactPage() {
                 <div className="flex items-start gap-4">
                   <Mail className="mt-1 h-5 w-5 text-text-muted" />
                   <div>
-                    <h3 className="font-semibold text-white">Email Support</h3>
-                    <p className="text-text">hi@kostra.io</p>
+                    <h3 className="font-semibold text-white">Contact form</h3>
+                    <p className="text-text">Use the form below and we will reply by email.</p>
                   </div>
                 </div>
               </CardContent>
