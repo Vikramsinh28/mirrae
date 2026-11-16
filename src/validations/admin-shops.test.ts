@@ -1,4 +1,4 @@
-import { adminShopsQuerySchema, adminShopStatusSchema, adminStatsQuerySchema } from './admin-shops';
+import { adminCreditAdjustmentSchema, adminShopsQuerySchema, adminShopStatusSchema, adminStatsQuerySchema } from './admin-shops';
 
 describe('adminStatsQuerySchema', () => {
   test('defaults to 7 days and accepts a whole number up to 90', () => {
@@ -42,5 +42,27 @@ describe('adminShopStatusSchema', () => {
 
   test.each(['PAUSED', 'UNINSTALLED', 'DELETED', '', undefined])('does not let an admin set %p', status => {
     expect(adminShopStatusSchema.safeParse({ status }).success).toBe(false);
+  });
+});
+
+describe('adminCreditAdjustmentSchema', () => {
+  test.each([50, -20, 0.5, 10000, -10000, 12.25])('accepts %p credits with a reason', amount => {
+    expect(adminCreditAdjustmentSchema.safeParse({ amount, reason: 'Goodwill for a failed launch' }).success).toBe(true);
+  });
+
+  test.each([0, 10001, -10001, 1.005, Number.NaN, Infinity, -Infinity])('rejects the amount %p', amount => {
+    expect(adminCreditAdjustmentSchema.safeParse({ amount, reason: 'a reason' }).success).toBe(false);
+  });
+
+  test.each(['10', null, undefined])('rejects an amount that is not a number: %p', amount => {
+    expect(adminCreditAdjustmentSchema.safeParse({ amount, reason: 'a reason' }).success).toBe(false);
+  });
+
+  test.each(['', '  ', 'ok', undefined, 'x'.repeat(201)])('rejects a missing or unreasonable reason %p', reason => {
+    expect(adminCreditAdjustmentSchema.safeParse({ amount: 5, reason }).success).toBe(false);
+  });
+
+  test('trims the reason', () => {
+    expect(adminCreditAdjustmentSchema.parse({ amount: 5, reason: '  compensation  ' }).reason).toBe('compensation');
   });
 });

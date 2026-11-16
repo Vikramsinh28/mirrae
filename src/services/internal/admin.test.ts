@@ -1,6 +1,7 @@
 import * as adminRepo from '@/services/repositories/admin';
 import * as shopRepo from '@/services/repositories/shop';
 import { AdminService } from './admin';
+import { ShopService } from './shop';
 
 jest.mock('@/services/repositories/admin');
 jest.mock('@/services/repositories/shop');
@@ -110,39 +111,105 @@ describe('AdminService.listShops', () => {
 
 describe('AdminService.setShopStatus', () => {
   beforeEach(() => jest.resetAllMocks());
+  const ADMIN = 1;
 
-  test('suspends an active shop', async () => {
-    shops.findShopById.mockResolvedValue({ id: 's', status: 'ACTIVE' } as never);
-    shops.updateShop.mockResolvedValue({ id: 's', status: 'SUSPENDED' } as never);
+  test('suspends an active shop and records who did it', async () => {
+    const shop = { id: 's', name: 'Shop', status: 'ACTIVE' };
+    shops.findShopById.mockResolvedValue(shop as never);
+    admin.setShopStatusWithAudit.mockResolvedValue({ id: 's', status: 'SUSPENDED' } as never);
 
-    expect(await AdminService.setShopStatus('s', 'SUSPENDED')).toEqual({ ok: true, status: 'SUSPENDED' });
-    expect(shops.updateShop).toHaveBeenCalledWith('s', { status: 'SUSPENDED' });
+    expect(await AdminService.setShopStatus(ADMIN, 's', 'SUSPENDED')).toEqual({ ok: true, status: 'SUSPENDED' });
+    expect(admin.setShopStatusWithAudit).toHaveBeenCalledWith({ adminId: ADMIN, shop, status: 'SUSPENDED' });
   });
 
   test('lets a suspended shop back in', async () => {
-    shops.findShopById.mockResolvedValue({ id: 's', status: 'SUSPENDED' } as never);
-    shops.updateShop.mockResolvedValue({ id: 's', status: 'ACTIVE' } as never);
+    shops.findShopById.mockResolvedValue({ id: 's', name: 'Shop', status: 'SUSPENDED' } as never);
+    admin.setShopStatusWithAudit.mockResolvedValue({ id: 's', status: 'ACTIVE' } as never);
 
-    expect(await AdminService.setShopStatus('s', 'ACTIVE')).toEqual({ ok: true, status: 'ACTIVE' });
+    expect(await AdminService.setShopStatus(ADMIN, 's', 'ACTIVE')).toEqual({ ok: true, status: 'ACTIVE' });
   });
 
-  test('never revives an uninstalled shop (only Shopify decides that)', async () => {
+  test('never revives an uninstalled shop (only Shopify decides that), and records nothing', async () => {
     shops.findShopById.mockResolvedValue({ id: 's', status: 'UNINSTALLED' } as never);
 
-    expect(await AdminService.setShopStatus('s', 'ACTIVE')).toEqual({ ok: false, reason: 'LOCKED' });
-    expect(shops.updateShop).not.toHaveBeenCalled();
+    expect(await AdminService.setShopStatus(ADMIN, 's', 'ACTIVE')).toEqual({ ok: false, reason: 'LOCKED' });
+    expect(admin.setShopStatusWithAudit).not.toHaveBeenCalled();
   });
 
   test('never lifts a suspension from a shop that is uninstalled but kept its SUSPENDED status', async () => {
     shops.findShopById.mockResolvedValue({ id: 's', status: 'SUSPENDED', uninstalledAt: new Date() } as never);
 
-    expect(await AdminService.setShopStatus('s', 'ACTIVE')).toEqual({ ok: false, reason: 'LOCKED' });
-    expect(shops.updateShop).not.toHaveBeenCalled();
+    expect(await AdminService.setShopStatus(ADMIN, 's', 'ACTIVE')).toEqual({ ok: false, reason: 'LOCKED' });
+    expect(admin.setShopStatusWithAudit).not.toHaveBeenCalled();
   });
 
   test('says NOT_FOUND for an unknown shop', async () => {
     shops.findShopById.mockResolvedValue(null);
 
-    expect(await AdminService.setShopStatus('nope', 'SUSPENDED')).toEqual({ ok: false, reason: 'NOT_FOUND' });
+    expect(await AdminService.setShopStatus(ADMIN, 'nope', 'SUSPENDED')).toEqual({ ok: false, reason: 'NOT_FOUND' });
+  });
+});
+
+describe('AdminService.adjustCredits', () => {
+  beforeEach(() => jest.resetAllMocks());
+
+  test('adjusts the balance of the account that pays for the shop, with the reason', async () => {
+    const shop = { id: 's', name: 'Shop', ownerId: 9 };
+    shops.findShopById.mockResolvedValue(shop as never);
+    admin.adjustOwnerCreditsWithAudit.mockResolvedValue({ ok: true, balance: 55 });
+
+    const result = await AdminService.adjustCredits(1, 's', { amount: 50, reason: 'Goodwill' });
+
+    expect(result).toEqual({ ok: true, balance: 55 });
+    expect(admin.adjustOwnerCreditsWithAudit).toHaveBeenCalledWith({ adminId: 1, shop, amount: 50, reason: 'Goodwill' });
+  });
+
+  test('passes on that a removal would take the balance below zero', async () => {
+    shops.findShopById.mockResolvedValue({ id: 's', ownerId: 9 } as never);
+    admin.adjustOwnerCreditsWithAudit.mockResolvedValue({ ok: false, reason: 'INSUFFICIENT' });
+
+    expect(await AdminService.adjustCredits(1, 's', { amount: -500, reason: 'Clawback' })).toEqual({ ok: false, reason: 'INSUFFICIENT' });
+  });
+
+  test('says NOT_FOUND for an unknown shop and changes nothing', async () => {
+    shops.findShopById.mockResolvedValue(null);
+
+    expect(await AdminService.adjustCredits(1, 'nope', { amount: 5, reason: 'Test' })).toEqual({ ok: false, reason: 'NOT_FOUND' });
+    expect(admin.adjustOwnerCreditsWithAudit).not.toHaveBeenCalled();
+  });
+});
+
+describe('AdminService.shopDetail', () => {
+  beforeEach(() => jest.resetAllMocks());
+  const shopRow = { id: 's', ownerId: 9, name: 'Shop', platform: 'WEB', status: 'ACTIVE', owner: { email: 'owner@example.com', credits: 12 } };
+
+  test('combines the shop, its paying account, usage and the admin history', async () => {
+    admin.findShopWithOwner.mockResolvedValue(shopRow as never);
+    jest.spyOn(ShopService, 'usage').mockResolvedValue({ ok: true, usage: { days: 7 } } as never);
+    admin.listAuditForShop.mockResolvedValue([
+      { id: 'a1', action: 'CREDITS_GRANTED', details: { amount: 50 }, createdAt: new Date('2026-11-17T00:00:00Z'), admin: { email: 'admin@example.com' } },
+    ] as never);
+
+    const result = await AdminService.shopDetail('s', 7);
+
+    expect(result.ok && result.detail.owner).toEqual({ email: 'owner@example.com', credits: 12 });
+    expect(result.ok && result.detail.audit[0]).toMatchObject({ id: 'a1', action: 'CREDITS_GRANTED', adminEmail: 'admin@example.com' });
+    expect(JSON.stringify(result)).not.toContain('ownerId');
+  });
+
+  test("hides a Shopify shop's made-up owner address", async () => {
+    admin.findShopWithOwner.mockResolvedValue({ ...shopRow, platform: 'SHOPIFY', owner: { email: 'shopify-x@shops.invalid', credits: 3 } } as never);
+    jest.spyOn(ShopService, 'usage').mockResolvedValue({ ok: true, usage: {} } as never);
+    admin.listAuditForShop.mockResolvedValue([]);
+
+    const result = await AdminService.shopDetail('s', 7);
+
+    expect(result.ok && result.detail.owner.email).toBeNull();
+  });
+
+  test('says NOT_FOUND for an unknown shop', async () => {
+    admin.findShopWithOwner.mockResolvedValue(null);
+
+    expect(await AdminService.shopDetail('nope', 7)).toEqual({ ok: false, reason: 'NOT_FOUND' });
   });
 });
