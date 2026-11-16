@@ -1,20 +1,13 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
 import { Suspense } from 'react';
 
-function AppPageContent() {
-  return (
-    <div className="min-h-screen">
-      <Button variant="default">Click me</Button>
-    </div>
-  );
-}
+import { OverviewPage } from '@/components/organisms/modules/shops/OverviewPage';
 
 export default function AppPage() {
   return (
     <Suspense fallback={<div className="min-h-screen" />}>
-      <AppPageContent />
+      <OverviewPage />
     </Suspense>
   );
 }

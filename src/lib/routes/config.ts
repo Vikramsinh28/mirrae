@@ -22,6 +22,7 @@ export const ALL_ROUTES: RouteConfig[] = [
   { path: '/images/[...path]', isPublic: true },
   { path: '/logos/[...path]', isPublic: true },
   { path: '/screenshots/[...path]', isPublic: true },
+  { path: '/marketing/[...path]', isPublic: true },
 
   // Public webhooks and auth
   { path: '/api/webhooks/stripe', isPublic: true },
@@ -52,6 +53,8 @@ export const ALL_ROUTES: RouteConfig[] = [
 
   { path: '/app/files', isPublic: false, accessTo: { GET: [USER, ADMIN] } },
   { path: '/app/try', isPublic: false, accessTo: { GET: [USER, ADMIN] } },
+  { path: '/app/shops', isPublic: false, accessTo: { GET: [USER, ADMIN] } },
+  { path: '/app/shops/[id]', isPublic: false, accessTo: { GET: [USER, ADMIN] } },
   { path: '/app/packages', isPublic: false, accessTo: { GET: [ADMIN] } },
   { path: '/app/blogs', isPublic: false, accessTo: { GET: [ADMIN] } },
   { path: '/app/categories', isPublic: false, accessTo: { GET: [ADMIN] } },
@@ -161,6 +164,11 @@ export const ALL_ROUTES: RouteConfig[] = [
   },
 
   // API routes - virtual try-on
+  // Merchant shops (every call is scoped to the signed-in owner in the service)
+  { path: '/api/shops', isPublic: false, accessTo: { GET: [USER, ADMIN], POST: [USER, ADMIN] } },
+  { path: '/api/shops/[id]', isPublic: false, accessTo: { GET: [USER, ADMIN], PATCH: [USER, ADMIN] } },
+  { path: '/api/shops/[id]/rotate-key', isPublic: false, accessTo: { POST: [USER, ADMIN] } },
+  { path: '/api/shops/[id]/usage', isPublic: false, accessTo: { GET: [USER, ADMIN] } },
   { path: '/api/tryon/create', isPublic: false, accessTo: { POST: [USER, ADMIN] } },
   { path: '/api/tryon/status', isPublic: false, accessTo: { GET: [USER, ADMIN] } },
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { applyCorsHeaders, handleCorsPreflightRequest } from './cors';
-import { isPublicRoute, isRouteConfigured } from './utils';
+import { findMatchingRoute, isPublicRoute, isRouteConfigured } from './utils';
 
 const STOREFRONT_PATHS = ['/api/storefront/session', '/api/storefront/photo', '/api/storefront/tryon', '/api/storefront/status'];
 
@@ -61,5 +61,25 @@ describe('storefront CORS preflight', () => {
 
     expect(response.headers.get('Access-Control-Allow-Headers')).toBe('x-storefront-token');
     expect(response.headers.get('Access-Control-Allow-Credentials')).toBeNull();
+  });
+});
+
+describe('merchant shop routes in the route config', () => {
+  const SHOP = '8a1f0c52-1111-4222-8333-444455556666';
+  const CASES: [string, string[]][] = [
+    ['/app/shops', ['GET']],
+    [`/app/shops/${SHOP}`, ['GET']],
+    ['/api/shops', ['GET', 'POST']],
+    [`/api/shops/${SHOP}`, ['GET', 'PATCH']],
+    [`/api/shops/${SHOP}/rotate-key`, ['POST']],
+    [`/api/shops/${SHOP}/usage`, ['GET']],
+  ];
+
+  test.each(CASES)('%s is registered, requires a login, and lets merchants use only %j', (path, methods) => {
+    expect(isRouteConfigured(path)).toBe(true);
+    const route = findMatchingRoute(path);
+    expect(route?.isPublic).toBe(false);
+    expect(Object.keys(route?.accessTo ?? {}).sort()).toEqual([...methods].sort());
+    methods.forEach(method => expect(route?.accessTo?.[method as 'GET']).toEqual(['USER', 'ADMIN']));
   });
 });

@@ -9,7 +9,8 @@ import { findPhotoProblem } from '@/services/external/tryon-check';
 import { generateExtraView } from '@/services/external/tryon-views';
 import { CreditService } from '@/services/internal/credit';
 import * as repo from '@/services/repositories/tryon-job';
-import { TryOnService } from './tryon';
+import { PHOTO_PROBLEM_MESSAGES, TryOnService } from './tryon';
+import { PHOTO_PROBLEM_CODES } from '@/lib/constants/tryon';
 import { prepareTryOnImage } from './tryon-image';
 
 jest.mock('@/services/internal/credit');
@@ -572,5 +573,11 @@ describe('TryOnService.getStatusForSession', () => {
       viewCount: 1,
       extrasPending: false,
     });
+  });
+});
+
+describe('photo problem codes', () => {
+  test('the shared list matches the messages shown to shoppers, so merchant reports and shopper text never drift apart', () => {
+    expect([...PHOTO_PROBLEM_CODES].sort()).toEqual(Object.keys(PHOTO_PROBLEM_MESSAGES).sort());
   });
 });

@@ -9,6 +9,7 @@ import {
   Package,
   Send,
   Shirt,
+  Store,
   Users,
   type LucideIcon
 } from 'lucide-react';
@@ -74,6 +75,12 @@ export const NAVIGATION_ITEMS: NavigationSection[] = [
         title: "Try on",
         url: siteConfig.baseLinks.try,
         icon: Shirt,
+        roles: [USER, ADMIN],
+      },
+      {
+        title: "Shops",
+        url: siteConfig.baseLinks.shops,
+        icon: Store,
         roles: [USER, ADMIN],
       },
       {

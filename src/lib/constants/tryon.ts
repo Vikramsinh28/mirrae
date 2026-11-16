@@ -16,3 +16,6 @@ export const creditsForViewCount = (viewCount: number): number =>
  * holding credits, so a crashed worker never locks a balance forever.
  */
 export const RESERVATION_WINDOW_MS = 10 * 60 * 1000;
+
+/** Why a try-on can be refused because of the photos; stored in TryOnJob.error and shown to merchants as a count. */
+export const PHOTO_PROBLEM_CODES = ['NO_PERSON', 'MULTIPLE_PEOPLE', 'PERSON_TOO_SMALL', 'NOT_CLOTHING'] as const;

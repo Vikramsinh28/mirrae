@@ -10,6 +10,7 @@ export const siteConfig = {
     // App routes
     home: '/app',
     try: '/app/try',
+    shops: '/app/shops',
     blogs: '/app/blogs',
     categories: '/app/categories',
     packages: '/app/packages',

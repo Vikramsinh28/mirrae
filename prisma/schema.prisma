@@ -131,8 +131,9 @@ enum ShopPlatform {
 
 enum ShopStatus {
   ACTIVE
-  SUSPENDED
+  SUSPENDED // Set by us (abuse, billing); the merchant cannot undo it
   UNINSTALLED
+  PAUSED // Set by the merchant to stop try-ons (and spend) immediately; they can resume
 }
 
 // A storefront that embeds the try-on widget. Its try-ons are paid from the owner's credits.

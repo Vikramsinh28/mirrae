@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { startOfUtcDay } from '@/lib/time';
 import { fetchProductImage, ProductImageError } from '@/lib/security/product-image';
 import { storefrontLimits } from '@/lib/storefront/limits';
 import { signStorefrontToken, verifyStorefrontToken, type StorefrontSession } from '@/lib/storefront/token';
@@ -31,9 +32,6 @@ type Rejected<Reason extends string> = { ok: false; reason: Reason; retryAfterMs
 type Authorized = { ok: true; shop: Shop; session: StorefrontSession } | Rejected<StorefrontFailure>;
 
 const originAllowed = (shop: Shop, origin: string) => origin !== '' && shop.allowedOrigins.includes(origin);
-
-const startOfUtcDay = (now: Date) =>
-  new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
 function rateLimited(...checks: ReturnType<typeof storefrontLimits.sessionByIp.check>[]): Rejected<'RATE_LIMITED'> | null {
   const blocked = checks.find(check => !check.allowed);
