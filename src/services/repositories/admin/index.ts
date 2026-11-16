@@ -1,5 +1,8 @@
+import { randomUUID } from 'node:crypto';
+
+import { CREDIT_TRANSACTION_TYPES } from '@/lib/constants/credits';
 import { prisma } from '@/lib/prisma';
-import type { Prisma } from '@/lib/prisma/generated/client';
+import type { Prisma, Shop } from '@/lib/prisma/generated/client';
 import type { AdminShopsQuery } from '@/validations/admin-shops';
 
 /** Platform-wide reads for the admin panel. Nothing here is scoped to one merchant: callers must already be admins. */
@@ -25,7 +28,7 @@ export async function getPlatformStats(since: Date, todayStart: Date) {
       prisma.tryOnJob.count({ where: { createdAt: { gte: todayStart } } }),
       prisma.tryOnJob.groupBy({ by: ['error'], where: { ...inWindow, status: 'FAILED' }, _count: { _all: true } }),
       prisma.$queryRaw<{ total: number }[]>`
-        SELECT COALESCE(SUM(-amount), 0)::float8 AS total FROM "CreditHistory" WHERE type = 'DEBIT' AND "createdAt" >= ${since}`,
+        SELECT COALESCE(SUM(-amount), 0)::float8 AS total FROM "CreditHistory" WHERE type = 'DEBIT' AND operation = 'TRYON' AND "createdAt" >= ${since}`,
       prisma.$queryRaw<{ type: string; sessions: number }[]>`
         SELECT "type", COUNT(DISTINCT "sessionId")::int AS sessions FROM "StorefrontEvent" WHERE "createdAt" >= ${since} GROUP BY "type"`,
       prisma.$queryRaw<{ test: boolean; charges: number; revenue: number }[]>`
@@ -100,4 +103,85 @@ export async function listShopsForAdmin(query: AdminShopsQuery) {
     }),
   ]);
   return { total, shops };
+}
+
+/** One shop with the account that owns (and pays for) it. */
+export const findShopWithOwner = (id: string) =>
+  prisma.shop.findUnique({
+    where: { id },
+    include: { owner: { select: { email: true, credits: true } } },
+  });
+
+export const listAuditForShop = (shopId: string, take: number) =>
+  prisma.adminAuditLog.findMany({
+    where: { shopId },
+    orderBy: { createdAt: 'desc' },
+    take,
+    select: { id: true, action: true, details: true, createdAt: true, admin: { select: { email: true } } },
+  });
+
+/** Suspends or restores a shop and records who did it, together: either both happen or neither. */
+export function setShopStatusWithAudit(input: { adminId: number; shop: Pick<Shop, 'id' | 'name' | 'status'>; status: 'ACTIVE' | 'SUSPENDED' }) {
+  const { adminId, shop, status } = input;
+  return prisma.$transaction(async tx => {
+    const updated = await tx.shop.update({ where: { id: shop.id }, data: { status } });
+    await tx.adminAuditLog.create({
+      data: {
+        adminId,
+        shopId: shop.id,
+        action: status === 'SUSPENDED' ? 'SHOP_SUSPENDED' : 'SHOP_UNSUSPENDED',
+        details: { shopName: shop.name, from: shop.status, to: status },
+      },
+    });
+    return updated;
+  });
+}
+
+export type CreditAdjustmentResult = { ok: true; balance: number } | { ok: false; reason: 'INSUFFICIENT' };
+
+/**
+ * Adds (positive) or removes (negative) credits on a shop's owner account. The balance change, the credit history
+ * row and the audit entry are ONE transaction, and a removal can never take the balance below zero (the same
+ * conditional UPDATE the try-on charge uses), so concurrent changes cannot lose credits.
+ */
+export function adjustOwnerCreditsWithAudit(input: {
+  adminId: number;
+  shop: Pick<Shop, 'id' | 'name' | 'ownerId'>;
+  amount: number;
+  reason: string;
+}): Promise<CreditAdjustmentResult> {
+  const { adminId, shop, amount, reason } = input;
+  const auditId = randomUUID();
+
+  return prisma.$transaction(async tx => {
+    if (amount > 0) {
+      await tx.user.update({ where: { id: shop.ownerId }, data: { credits: { increment: amount } } });
+    } else {
+      const removed = await tx.user.updateMany({ where: { id: shop.ownerId, credits: { gte: -amount } }, data: { credits: { decrement: -amount } } });
+      if (removed.count === 0) return { ok: false as const, reason: 'INSUFFICIENT' as const };
+    }
+    const { credits: balance } = await tx.user.findUniqueOrThrow({ where: { id: shop.ownerId }, select: { credits: true } });
+
+    await tx.creditHistory.create({
+      data: {
+        userId: shop.ownerId,
+        type: amount > 0 ? CREDIT_TRANSACTION_TYPES.CREDIT : CREDIT_TRANSACTION_TYPES.DEBIT,
+        operation: 'ADMIN_ADJUSTMENT',
+        amount,
+        balanceAfter: balance,
+        objectId: auditId,
+        description: `Admin ${amount > 0 ? 'added' : 'removed'} credits: ${reason}`,
+      },
+    });
+    await tx.adminAuditLog.create({
+      data: {
+        id: auditId,
+        adminId,
+        shopId: shop.id,
+        action: amount > 0 ? 'CREDITS_GRANTED' : 'CREDITS_REMOVED',
+        details: { shopName: shop.name, amount, reason, balanceAfter: balance },
+      },
+    });
+    return { ok: true as const, balance };
+  });
 }

@@ -28,4 +28,20 @@ export const adminShopsQuerySchema = z.object({
 // An admin can suspend a shop or let it back in. PAUSED is the merchant's own switch and UNINSTALLED is Shopify's.
 export const adminShopStatusSchema = z.object({ status: z.enum(['ACTIVE', 'SUSPENDED']) });
 
+const MAX_CREDIT_ADJUSTMENT = 10_000;
+const MIN_REASON_LENGTH = 3;
+const MAX_REASON_LENGTH = 200;
+
+/** Credits an admin adds (positive) or removes (negative): non-zero, bounded, at most two decimals, and always with a reason. */
+export const adminCreditAdjustmentSchema = z.object({
+  amount: z
+    .number()
+    .finite()
+    .refine(amount => amount !== 0, 'The amount cannot be zero')
+    .refine(amount => Math.abs(amount) <= MAX_CREDIT_ADJUSTMENT, `At most ${MAX_CREDIT_ADJUSTMENT} credits at a time`)
+    .refine(amount => Math.round(amount * 100) / 100 === amount, 'At most two decimals'),
+  reason: z.string().trim().min(MIN_REASON_LENGTH, 'Say why').max(MAX_REASON_LENGTH),
+});
+
+export type AdminCreditAdjustment = z.infer<typeof adminCreditAdjustmentSchema>;
 export type AdminShopsQuery = z.infer<typeof adminShopsQuerySchema>;

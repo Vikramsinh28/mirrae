@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useDeferredValue, useState } from 'react';
 
 import { PageHeaderWithAction } from '@/components/molecules/common/PageHeaderWithAction';
@@ -35,7 +36,9 @@ function ShopRow({ shop, onChange, busy }: { shop: AdminShop; onChange: (id: str
   return (
     <TableRow>
       <TableCell>
-        <div className="font-medium">{shop.name}</div>
+        <Link href={`/app/admin/shops/${shop.id}`} className="font-medium underline-offset-2 hover:underline">
+          {shop.name}
+        </Link>
         <div className="text-text-muted text-[11px]">{shop.domain}</div>
       </TableCell>
       <TableCell><Badge variant="default">{shop.platform === 'SHOPIFY' ? 'Shopify' : 'Website'}</Badge></TableCell>

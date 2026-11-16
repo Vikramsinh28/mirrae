@@ -67,6 +67,7 @@ model User {
   campaignRecipients CampaignRecipient[]
   tryOnJobs          TryOnJob[]
   shops              Shop[]
+  adminAuditLogs     AdminAuditLog[]
 }
 
 model Package {
@@ -120,6 +121,7 @@ enum CreditTransactionType {
 enum CreditOperation {
   INITIAL_CREDITS
   TRYON
+  ADMIN_ADJUSTMENT // Credits added or removed by an admin (see AdminAuditLog); never counted as try-on spend
 }
 
 enum ShopPlatform {
@@ -161,6 +163,29 @@ model Shop {
 
   @@unique([platform, domain])
   @@index([ownerId])
+}
+
+enum AdminAction {
+  SHOP_SUSPENDED
+  SHOP_UNSUSPENDED
+  CREDITS_GRANTED
+  CREDITS_REMOVED
+}
+
+// Who did what in the admin panel. shopId is a plain id on purpose (no foreign key): the record outlives an erased
+// shop, and details keeps a snapshot (shop name, amounts, the reason) that stays readable afterwards.
+model AdminAuditLog {
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adminId   Int
+  action    AdminAction
+  shopId    String?     @db.Uuid
+  details   Json
+  createdAt DateTime    @default(now())
+
+  admin User @relation(fields: [adminId], references: [id])
+
+  @@index([shopId, createdAt])
+  @@index([adminId, createdAt])
 }
 
 enum ShopifyChargeStatus {
