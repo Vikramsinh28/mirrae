@@ -8,7 +8,7 @@ jest.mock('resend');
 
 describe('sendWelcomeEmail', () => {
   const expectedResponse = {
-    from: 'Kostra <onboarding@resend.dev>',
+    from: 'Mirrae <onboarding@resend.dev>',
     to: ['test@example.com'],
     subject: 'Welcome!',
     html: '<strong>Hello there!</strong>',

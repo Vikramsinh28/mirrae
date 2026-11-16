@@ -1,17 +1,17 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: kostra-postgres
+    container_name: mirrae-postgres
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=kostra
+      - POSTGRES_DB=mirrae
     ports:
       - "5434:5432"
     volumes:
       - ./data/pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d kostra"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mirrae"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -20,11 +20,11 @@ services:
     build:
       context: ..
       dockerfile: infra/Dockerfile-local.dockerfile
-    container_name: kostra-app
+    container_name: mirrae-app
     environment:
       - NODE_ENV=development
       - HOST=0.0.0.0
-      - POSTGRES_URL=postgresql://postgres:postgres@postgres:5432/kostra?schema=public
+      - POSTGRES_URL=postgresql://postgres:postgres@postgres:5432/mirrae?schema=public
       - WATCHPACK_POLLING=true
       - CHOKIDAR_USEPOLLING=true
     env_file:

@@ -1,4 +1,4 @@
-# Contributing to Kostra Boilerplate
+# Contributing to Mirrae
 
 Thank you for your interest in contributing! This document covers local setup, workflow, and expectations for pull requests.
 
@@ -16,8 +16,8 @@ Thank you for your interest in contributing! This document covers local setup, w
 1. Fork and clone the repository:
 
 ```bash
-git clone git@github.com:advantailabs/kostra-boilerplate.git
-cd kostra-boilerplate
+git clone <your-repo-url>
+cd mirrae
 ```
 
 2. Install dependencies:

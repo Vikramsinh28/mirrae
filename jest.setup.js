@@ -1,5 +1,5 @@
 // Mock environment variables for testing
-// Never fall back to a real database: another project's DB (kostra) lives on the same server and
+// Never fall back to a real database: another project's DB lives on the same server and
 // DB tests call deleteMany. With no TEST_POSTGRES_URL, point at an unreachable address so any
 // accidental DB access fails fast instead of touching real data. Mocked tests never connect.
 process.env.POSTGRES_URL =

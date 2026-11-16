@@ -1,4 +1,4 @@
-# Kostra Boilerplate
+# Mirrae
 
 **Open-source**, production-ready Next.js SaaS boilerplate from [Advantai Labs](https://advant.xyz/).
 
@@ -61,8 +61,8 @@ Before you begin, ensure you have the following installed:
 1. Clone the repository:
 
 ```bash
-git clone git@github.com:advantailabs/kostra-boilerplate.git
-cd kostra-boilerplate
+git clone <your-repo-url>
+cd mirrae
 ```
 
 2. Install dependencies:
@@ -139,26 +139,26 @@ docker-compose up -d
 
 ```bash
 # Build production image
-docker build -f infra/Dockerfile -t kostra-boilerplate .
+docker build -f infra/Dockerfile -t mirrae .
 
 # Run production container
-docker run -p 3000:3000 kostra-boilerplate
+docker run -p 3000:3000 mirrae
 ```
 
 ### Local Development with Docker
 
 ```bash
 # Build local development image
-docker build -f infra/Dockerfile-local.dockerfile -t kostra-boilerplate-local .
+docker build -f infra/Dockerfile-local.dockerfile -t mirrae-local .
 
 # Run local development container
-docker run -p 3000:3000 kostra-boilerplate-local
+docker run -p 3000:3000 mirrae-local
 ```
 
 ## 📁 Project Structure
 
 ```
-kostra-boilerplate/
+mirrae/
 ├── src/
 │   ├── app/                    # Next.js app router pages and layouts
 │   │   ├── api/               # API routes and endpoints
@@ -644,13 +644,11 @@ For security issues, see [SECURITY.md](.github/SECURITY.md) — please do not op
 
 ## 📄 License
 
-Kostra is an **open-source** project released under the [MIT License](LICENSE).
+Mirrae is an **open-source** project released under the [MIT License](LICENSE).
 
 You are free to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the software, subject to including the copyright notice and permission notice in all copies.
 
 Copyright (c) 2026 Advantai Labs
-
-**Attribution:** Not required by the license, but we'd be glad if you credit this project when you use it — a link to the repo or a mention of Advantai Labs / Kostra Boilerplate is appreciated.
 
 ## 🙏 Acknowledgments
 

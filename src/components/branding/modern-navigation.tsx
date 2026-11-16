@@ -81,7 +81,7 @@ export function ModernNavigation() {
   const navItems = [
     { name: 'Home', href: '/', section: 'home' },
     { name: 'Features', href: '/#features', section: 'features' },
-    { name: 'Why Kostra', href: '/#architecture', section: 'architecture' },
+    { name: 'Why Mirrae', href: '/#architecture', section: 'architecture' },
     { name: 'Blog', href: '/blog', section: '' },
     { name: 'Pricing', href: '/#pricing', section: 'pricing' },]
 
@@ -125,7 +125,7 @@ export function ModernNavigation() {
             <div className="h-6 w-6 sm:h-8 sm:w-8">
               <Image
                 src="/logos/light-logo.png"
-                alt="Next.js Boilerplate Logo"
+                alt="Mirrae logo"
                 width={32}
                 height={32}
                 className="h-full w-full object-contain"

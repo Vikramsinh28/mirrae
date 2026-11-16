@@ -68,7 +68,7 @@ export function MinimalFooter() {
                   <div className="h-6 w-6 sm:h-8 sm:w-8">
                     <Image
                       src="/logos/light-logo.png"
-                      alt="Next.js Boilerplate Logo"
+                      alt="Mirrae logo"
                       width={80}
                       height={20}
                       className="h-full w-full object-contain"

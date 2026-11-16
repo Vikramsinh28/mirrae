@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.0] - 2026-07-20
 
-Initial open-source release of Kostra Boilerplate.
+Initial open-source release of Mirrae.
 
 ### Added
 
@@ -18,4 +18,4 @@ Initial open-source release of Kostra Boilerplate.
 - Dependabot configuration for npm and GitHub Actions
 - CI workflow for lint, build, and tests
 
-[1.0.0]: https://github.com/advantailabs/kostra-boilerplate/releases/tag/v1.0.0
+[1.0.0]: #

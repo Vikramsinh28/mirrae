@@ -1,5 +1,5 @@
 {
-  "name": "kostra",
+  "name": "mirrae",
   "version": "0.1.0",
   "private": true,
   "engines": {
@@ -98,6 +98,7 @@
     "framer-motion": "^12.23.22",
     "google-auth-library": "^11.3.4",
     "html-entities": "^2.6.0",
+    "import-in-the-middle": "^2.0.0",
     "jose": "^6.1.0",
     "lucide-react": "^0.533.0",
     "marked": "^16.3.0",
@@ -115,6 +116,7 @@
     "react-syntax-highlighter": "^15.6.6",
     "recharts": "^2.15.4",
     "remark-gfm": "^4.0.1",
+    "require-in-the-middle": "^8.0.1",
     "resend": "^6.1.2",
     "sass": "^1.93.2",
     "sharp": "^0.34.4",

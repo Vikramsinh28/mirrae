@@ -24,27 +24,7 @@ const nextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'kostra.io',
-      },
-      {
-        protocol: 'https',
-        hostname: 'public-storage.kostra.io',
-      },
-      {
-        protocol: 'https',
-        hostname: 'private-storage.kostra.io',
-      },
-      {
-        protocol: 'https',
         hostname: 'lh3.googleusercontent.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'kostra-data.s3.amazonaws.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'kostra-data-public.s3.amazonaws.com',
       },
     ],
   },
@@ -109,7 +89,7 @@ export default withSentryConfig(nextConfig, {
 
   org: 'advant-xi',
 
-  project: 'kostra',
+  project: 'mirrae',
 
   // Only print logs for uploading source maps in CI
   silent: !process.env.CI,

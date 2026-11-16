@@ -101,7 +101,7 @@ export function UseCases() {
             Perfect For Every Team
           </h2>
           <p className="mx-auto mt-6 max-w-3xl text-xl text-gray-300">
-            Whether you&apos;re in HR, support, sales, engineering, or compliance - Kostra adapts to your
+            Whether you&apos;re in HR, support, sales, engineering, or compliance - Mirrae adapts to your
             team&apos;s unique needs
           </p>
         </motion.div>
