@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { useShopifyAdmin } from '@/hooks/useShopifyAdmin';
 import { creditLevel } from '@/lib/credits/level';
+import { CREDIT_PACKS } from '@/lib/shopify/billing';
 import { themeEditorLink } from '@/lib/shopify/links';
 import type { ShopifyOverview } from '@/services/api/shopify-admin';
 
@@ -28,7 +29,7 @@ function Notice({ children, tone = 'info' }: { children: React.ReactNode; tone?:
   );
 }
 
-function CreditsCard({ credits }: { credits: number }) {
+function CreditsCard({ credits, creditedNow, onBuy, buying, error }: { credits: number; creditedNow: number; onBuy: (packId: string) => void; buying: boolean; error: string | null }) {
   const level = creditLevel(credits);
 
   return (
@@ -39,6 +40,7 @@ function CreditsCard({ credits }: { credits: number }) {
       </CardHeader>
       <CardContent className="grid gap-3">
         <p className="text-text text-2xl font-semibold">{credits.toFixed(1)}</p>
+        {creditedNow > 0 && <Notice>{creditedNow} credits were added to your balance. Thank you!</Notice>}
         {level === 'empty' && (
           <p role="alert" className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-xs text-red-800 dark:bg-red-400/10 dark:text-red-400">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
@@ -51,7 +53,16 @@ function CreditsCard({ credits }: { credits: number }) {
             Credits are running low.
           </p>
         )}
-        <p className="text-text-muted text-xs">Buying credits through your Shopify bill is coming soon.</p>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {CREDIT_PACKS.map(pack => (
+            <Button key={pack.id} type="button" variant="outline" disabled={buying} onClick={() => onBuy(pack.id)} className="h-auto flex-col py-2">
+              <span className="text-sm font-semibold">{pack.credits} credits</span>
+              <span className="text-text-muted text-xs">${pack.priceUsd}</span>
+            </Button>
+          ))}
+        </div>
+        {error && <Notice tone="error">{error}</Notice>}
+        <p className="text-text-muted text-xs">You approve the charge on Shopify, and it appears on your Shopify bill.</p>
       </CardContent>
     </Card>
   );
@@ -78,7 +89,7 @@ function SetupCard({ overview, apiKey }: { overview: ShopifyOverview; apiKey: st
 
 function Dashboard({ apiKey }: { apiKey: string }) {
   const [days, setDays] = useState<number>(30);
-  const { overview, setLive } = useShopifyAdmin(apiKey, days);
+  const { overview, setLive, buy, creditedNow } = useShopifyAdmin(apiKey, days);
 
   if (overview.isLoading) return <Skeleton className="h-64 rounded-lg" />;
   if (overview.isError || !overview.data) {
@@ -120,7 +131,7 @@ function Dashboard({ apiKey }: { apiKey: string }) {
       {shop.status === 'SUSPENDED' && <Notice tone="error">This shop has been suspended, so shoppers cannot use the button. Please contact support.</Notice>}
 
       <SetupCard overview={overview.data} apiKey={apiKey} />
-      <CreditsCard credits={overview.data.credits} />
+      <CreditsCard credits={overview.data.credits} creditedNow={creditedNow} onBuy={packId => buy.mutate(packId)} buying={buy.isPending} error={buy.isError ? buy.error.message : null} />
 
       <Card>
         <CardHeader>

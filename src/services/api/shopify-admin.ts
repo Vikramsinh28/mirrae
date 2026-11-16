@@ -34,6 +34,13 @@ async function call<T>(getToken: GetSessionToken, path: string, init: RequestIni
 export const shopifyAdminApi = {
   overview: (getToken: GetSessionToken, days: number) => call<ShopifyOverview>(getToken, `/api/shopify/shop?days=${days}`),
 
+  /** Starts buying a credit pack; the merchant approves the charge on the returned Shopify page. */
+  purchase: (getToken: GetSessionToken, packId: string) =>
+    call<{ confirmationUrl: string }>(getToken, '/api/shopify/billing/purchase', { method: 'POST', body: JSON.stringify({ packId }) }),
+
+  /** Adds the credits for purchases approved since the last visit; returns how many were added now. */
+  syncPurchases: (getToken: GetSessionToken) => call<{ credited: number }>(getToken, '/api/shopify/billing/sync', { method: 'POST' }),
+
   setLive: (getToken: GetSessionToken, status: 'ACTIVE' | 'PAUSED') =>
     call<{ shop: EmbeddedShop }>(getToken, '/api/shopify/shop', { method: 'PATCH', body: JSON.stringify({ status }) }),
 };

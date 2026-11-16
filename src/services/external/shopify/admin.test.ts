@@ -1,4 +1,4 @@
-import { fetchShopProfile, ShopifyApiError } from './admin';
+import { createOneTimePurchase, fetchShopProfile, listOneTimePurchases, ShopifyApiError } from './admin';
 
 const CONFIG = { clientId: 'client-id', clientSecret: 'client-secret' };
 const SHOP = 'my-store.myshopify.com';
@@ -74,5 +74,55 @@ describe('fetchShopProfile', () => {
     const error = await run(fetchImpl).catch((caught: Error) => caught);
 
     expect((error as Error).message).not.toMatch(/client-secret|session\.jwt|shpat_/);
+  });
+});
+
+describe('one-time purchases', () => {
+  const exchange = () => json(200, { access_token: 'shpat_online' });
+  const call = (fetchImpl: jest.Mock) => ({ shop: SHOP, sessionToken: 'session.jwt', config: CONFIG, fetchImpl: fetchImpl as unknown as typeof fetch });
+
+  test('creates a purchase and returns its id and the approval page', async () => {
+    const fetchImpl = jest.fn().mockResolvedValueOnce(exchange()).mockResolvedValueOnce(
+      json(200, {
+        data: {
+          appPurchaseOneTimeCreate: {
+            appPurchaseOneTime: { id: 'gid://shopify/AppPurchaseOneTime/1' },
+            confirmationUrl: `https://${SHOP}/admin/charges/1/confirm`,
+            userErrors: [],
+          },
+        },
+      })
+    );
+
+    const result = await createOneTimePurchase({ ...call(fetchImpl), name: '50 credits', priceUsd: 9, returnUrl: `https://${SHOP}/admin/apps/x`, test: true });
+
+    expect(result).toEqual({ gid: 'gid://shopify/AppPurchaseOneTime/1', confirmationUrl: `https://${SHOP}/admin/charges/1/confirm` });
+    const body = JSON.parse(fetchImpl.mock.calls[1][1].body);
+    expect(body.variables).toEqual({ name: '50 credits', price: { amount: 9, currencyCode: 'USD' }, returnUrl: `https://${SHOP}/admin/apps/x`, test: true });
+  });
+
+  test('fails when Shopify reports user errors', async () => {
+    const fetchImpl = jest.fn().mockResolvedValueOnce(exchange()).mockResolvedValueOnce(
+      json(200, { data: { appPurchaseOneTimeCreate: { appPurchaseOneTime: null, confirmationUrl: null, userErrors: [{ message: 'nope' }] } } })
+    );
+
+    await expect(createOneTimePurchase({ ...call(fetchImpl), name: 'x', priceUsd: 9, returnUrl: 'https://x.test', test: true })).rejects.toThrow(ShopifyApiError);
+  });
+
+  test('lists the latest purchases with their status', async () => {
+    const fetchImpl = jest.fn().mockResolvedValueOnce(exchange()).mockResolvedValueOnce(
+      json(200, { data: { currentAppInstallation: { oneTimePurchases: { nodes: [{ id: 'gid://a', status: 'ACTIVE' }, { id: 'gid://b', status: 'PENDING' }] } } } })
+    );
+
+    expect(await listOneTimePurchases(call(fetchImpl))).toEqual([
+      { gid: 'gid://a', status: 'ACTIVE' },
+      { gid: 'gid://b', status: 'PENDING' },
+    ]);
+  });
+
+  test('fails on an unexpected list answer instead of returning an empty list', async () => {
+    const fetchImpl = jest.fn().mockResolvedValueOnce(exchange()).mockResolvedValueOnce(json(200, { data: { somethingElse: true } }));
+
+    await expect(listOneTimePurchases(call(fetchImpl))).rejects.toThrow(ShopifyApiError);
   });
 });

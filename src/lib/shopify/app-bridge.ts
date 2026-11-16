@@ -36,7 +36,8 @@ export function loadAppBridge(apiKey: string): Promise<AppBridge | null> {
     const timer = setTimeout(() => reject(new Error('Shopify App Bridge did not load')), LOAD_TIMEOUT_MS);
     script.onload = () => {
       clearTimeout(timer);
-      window.shopify ? resolve(window.shopify) : reject(new Error('Shopify App Bridge did not start'));
+      if (window.shopify) resolve(window.shopify);
+      else reject(new Error('Shopify App Bridge did not start'));
     };
     script.onerror = () => {
       clearTimeout(timer);

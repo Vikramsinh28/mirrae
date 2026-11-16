@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { loadAppBridge } from '@/lib/shopify/app-bridge';
 import { shopifyAdminApi } from '@/services/api/shopify-admin';
@@ -16,7 +17,7 @@ export function useShopifyAdmin(apiKey: string, days: number) {
     retry: false,
   });
   const appBridge = bridge.data ?? null;
-  const getToken = appBridge ? () => appBridge.idToken() : null;
+  const getToken = useMemo(() => (appBridge ? () => appBridge.idToken() : null), [appBridge]);
 
   const overview = useQuery({
     queryKey: overviewKey(days),
@@ -30,5 +31,29 @@ export function useShopifyAdmin(apiKey: string, days: number) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['shopifyOverview'] }),
   });
 
-  return { bridge, overview, setLive, embedded: bridge.isSuccess && bridge.data !== null };
+  // Settle any purchase approved since the last visit, once per page load, then refresh the balance.
+  const [creditedNow, setCreditedNow] = useState(0);
+  const synced = useRef(false);
+  useEffect(() => {
+    if (!getToken || synced.current) return;
+    synced.current = true;
+    void shopifyAdminApi
+      .syncPurchases(getToken)
+      .then(({ credited }) => {
+        if (credited > 0) {
+          setCreditedNow(credited);
+          void queryClient.invalidateQueries({ queryKey: ['shopifyOverview'] });
+        }
+      })
+      // The sync is a courtesy on page load: the shop still works and the next visit tries again.
+      .catch(() => undefined);
+  }, [getToken, queryClient]);
+
+  // Opens Shopify's approval page in the top window (it cannot load inside this frame).
+  const buy = useMutation({
+    mutationFn: (packId: string) => shopifyAdminApi.purchase(getToken as () => Promise<string>, packId),
+    onSuccess: ({ confirmationUrl }) => window.open(confirmationUrl, '_top'),
+  });
+
+  return { bridge, overview, setLive, buy, creditedNow, embedded: bridge.isSuccess && bridge.data !== null };
 }

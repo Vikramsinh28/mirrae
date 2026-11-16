@@ -75,14 +75,15 @@ async function post(fetchImpl: typeof fetch, url: string, headers: Record<string
   }
 }
 
-export async function fetchShopProfile(input: {
+interface AdminCall {
   shop: string;
   sessionToken: string;
   config: ShopifyConfig;
   fetchImpl?: typeof fetch;
-}): Promise<ShopProfile> {
-  const { shop, sessionToken, config, fetchImpl = fetch } = input;
+}
 
+/** Swaps the embedded app's session token for a short-lived online access token. */
+async function onlineAccessToken({ shop, sessionToken, config, fetchImpl = fetch }: AdminCall): Promise<string> {
   const exchange = exchangeReplySchema.safeParse(
     await post(
       fetchImpl,
@@ -100,18 +101,83 @@ export async function fetchShopProfile(input: {
     )
   );
   if (!exchange.success) throw new ShopifyApiError('Shopify did not return an access token (token exchange)');
+  return exchange.data.access_token;
+}
 
-  const reply = shopReplySchema.safeParse(
-    await post(
-      fetchImpl,
-      `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
-      { 'X-Shopify-Access-Token': exchange.data.access_token },
-      { query: SHOP_QUERY },
-      'shop query'
-    )
-  );
-  if (!reply.success) throw new ShopifyApiError('Shopify did not return the shop details (shop query)');
+/** One GraphQL call as this session. GraphQL-level errors (HTTP 200 with an "errors" list) are failures too. */
+async function graphql(call: AdminCall, query: string, variables: Record<string, unknown>, step: string): Promise<unknown> {
+  const { shop, fetchImpl = fetch } = call;
+  const accessToken = await onlineAccessToken(call);
 
-  const { name, email, primaryDomain } = reply.data.data.shop;
+  const reply = (await post(
+    fetchImpl,
+    `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
+    { 'X-Shopify-Access-Token': accessToken },
+    { query, variables },
+    step
+  )) as { data?: unknown; errors?: unknown } | null;
+
+  if (!reply || reply.errors || reply.data === undefined) throw new ShopifyApiError(`Shopify did not accept the request (${step})`);
+  return reply.data;
+}
+
+export async function fetchShopProfile(input: AdminCall): Promise<ShopProfile> {
+  const data = await graphql(input, SHOP_QUERY, {}, 'shop query');
+
+  const parsed = shopReplySchema.shape.data.safeParse(data);
+  if (!parsed.success) throw new ShopifyApiError('Shopify did not return the shop details (shop query)');
+
+  const { name, email, primaryDomain } = parsed.data.shop;
   return { name, contactEmail: email ?? null, primaryOrigin: httpsOrigin(primaryDomain?.url) };
+}
+
+const CREATE_PURCHASE = `mutation CreatePurchase($name: String!, $price: MoneyInput!, $returnUrl: URL!, $test: Boolean) {
+  appPurchaseOneTimeCreate(name: $name, price: $price, returnUrl: $returnUrl, test: $test) {
+    appPurchaseOneTime { id }
+    confirmationUrl
+    userErrors { field message }
+  }
+}`;
+
+const LIST_PURCHASES = `{ currentAppInstallation { oneTimePurchases(first: 25, reverse: true) { nodes { id status } } } }`;
+
+const createPurchaseSchema = z.object({
+  appPurchaseOneTimeCreate: z.object({
+    appPurchaseOneTime: z.object({ id: z.string().min(1) }).nullable(),
+    confirmationUrl: z.string().nullable(),
+    userErrors: z.array(z.object({ message: z.string() })),
+  }),
+});
+
+const listPurchasesSchema = z.object({
+  currentAppInstallation: z.object({ oneTimePurchases: z.object({ nodes: z.array(z.object({ id: z.string(), status: z.string() })) }) }),
+});
+
+export interface CreatedPurchase {
+  gid: string;
+  confirmationUrl: string;
+}
+
+/** Asks Shopify to bill the merchant once. The merchant approves it on the returned confirmation page. */
+export async function createOneTimePurchase(
+  input: AdminCall & { name: string; priceUsd: number; returnUrl: string; test: boolean }
+): Promise<CreatedPurchase> {
+  const { name, priceUsd, returnUrl, test, ...call } = input;
+  const data = await graphql(call, CREATE_PURCHASE, { name, price: { amount: priceUsd, currencyCode: 'USD' }, returnUrl, test }, 'create purchase');
+
+  const parsed = createPurchaseSchema.safeParse(data);
+  if (!parsed.success) throw new ShopifyApiError('Shopify did not return the purchase (create purchase)');
+
+  const { appPurchaseOneTime, confirmationUrl, userErrors } = parsed.data.appPurchaseOneTimeCreate;
+  if (userErrors.length > 0 || !appPurchaseOneTime || !confirmationUrl) throw new ShopifyApiError('Shopify refused the purchase (create purchase)');
+
+  return { gid: appPurchaseOneTime.id, confirmationUrl };
+}
+
+/** The app's most recent one-time purchases with their current status, for settling ones the merchant has since approved. */
+export async function listOneTimePurchases(input: AdminCall): Promise<{ gid: string; status: string }[]> {
+  const parsed = listPurchasesSchema.safeParse(await graphql(input, LIST_PURCHASES, {}, 'list purchases'));
+  if (!parsed.success) throw new ShopifyApiError('Shopify did not return the purchases (list purchases)');
+
+  return parsed.data.currentAppInstallation.oneTimePurchases.nodes.map(node => ({ gid: node.id, status: node.status }));
 }

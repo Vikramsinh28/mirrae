@@ -156,9 +156,39 @@ model Shop {
   owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   tryOnJobs TryOnJob[]
   events    StorefrontEvent[]
+  charges   ShopifyCharge[]
 
   @@unique([platform, domain])
   @@index([ownerId])
+}
+
+enum ShopifyChargeStatus {
+  PENDING
+  ACTIVE
+  DECLINED
+  EXPIRED
+}
+
+// One credit pack bought through Shopify Billing. creditedAt is set in the same transaction that adds the credits,
+// so a charge is paid out exactly once even if the session sync and the webhook both see it. Kept (with shopId
+// cleared) when a shop is erased, because it is a financial record.
+model ShopifyCharge {
+  id         String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  shopId     String?             @db.Uuid
+  shopDomain String
+  gid        String              @unique // gid://shopify/AppPurchaseOneTime/123
+  packId     String
+  credits    Float
+  priceUsd   Decimal             @db.Decimal(10, 2)
+  test       Boolean // Test charges are never billed to the merchant, but still add credits in development
+  status     ShopifyChargeStatus @default(PENDING)
+  creditedAt DateTime?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  shop Shop? @relation(fields: [shopId], references: [id], onDelete: SetNull)
+
+  @@index([shopId, status])
 }
 
 enum StorefrontEventType {

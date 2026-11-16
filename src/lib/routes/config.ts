@@ -42,6 +42,8 @@ export const ALL_ROUTES: RouteConfig[] = [
   { path: '/api/shopify/install', isPublic: true },
   { path: '/api/shopify/webhooks', isPublic: true },
   { path: '/api/shopify/shop', isPublic: true },
+  { path: '/api/shopify/billing/purchase', isPublic: true },
+  { path: '/api/shopify/billing/sync', isPublic: true },
   { path: '/shopify', isPublic: true },
   { path: '/api/auth/logout', isPublic: true },
   { path: '/api/auth', isPublic: true },
