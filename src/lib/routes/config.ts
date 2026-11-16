@@ -38,6 +38,9 @@ export const ALL_ROUTES: RouteConfig[] = [
   { path: '/api/storefront/tryon', isPublic: true },
   { path: '/api/storefront/status', isPublic: true },
   { path: '/api/storefront/event', isPublic: true },
+  // Shopify app: authenticated by a Shopify session token / webhook signature checked inside the route, not by our login cookie
+  { path: '/api/shopify/install', isPublic: true },
+  { path: '/api/shopify/webhooks', isPublic: true },
   { path: '/api/auth/logout', isPublic: true },
   { path: '/api/auth', isPublic: true },
   { path: '/api/auth/google/verify', isPublic: true },

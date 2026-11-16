@@ -72,7 +72,7 @@ function violatedFields(error: unknown): string[] {
   return [...reported, cause?.originalMessage ?? ''].map(item => String(item).replace(/"/g, ''));
 }
 
-const uniqueViolationOn = (error: unknown, field: string): boolean =>
+export const uniqueViolationOn = (error: unknown, field: string): boolean =>
   violatedFields(error).some(item => item === field || item.includes(`_${field}_`));
 
 const isPhotoProblem = (code: string): boolean => (PHOTO_PROBLEM_CODES as readonly string[]).includes(code);

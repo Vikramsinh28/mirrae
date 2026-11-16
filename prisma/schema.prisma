@@ -148,6 +148,8 @@ model Shop {
   imageHosts     String[] // Hosts product images may be downloaded from (SSRF allowlist)
   status         ShopStatus   @default(ACTIVE)
   dailyTryOnCap  Int          @default(200) // Max try-ons started per UTC day across all shoppers
+  contactEmail   String? // Shopify stores: the store contact email as Shopify states it. Self-asserted: never used to link accounts
+  uninstalledAt  DateTime? // Shopify stores: when the app was uninstalled; cleared on reinstall
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
