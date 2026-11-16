@@ -3,6 +3,7 @@
 import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
 
+import { LowCreditBanner } from '@/components/molecules/common/LowCreditBanner';
 import { PageHeaderWithAction } from '@/components/molecules/common/PageHeaderWithAction';
 import { TryOnImageField } from '@/components/molecules/tryon/TryOnImageField';
 import { TryOnResultGallery } from '@/components/molecules/tryon/TryOnResultGallery';
@@ -80,6 +81,9 @@ export default function TryOnPage() {
       <PageHeaderWithAction title="Try it on your product" description="See what your shoppers will see" />
 
       <div className="mx-auto w-full max-w-lg p-4 max-sm:p-3">
+        <div className="mb-4 empty:hidden">
+          <LowCreditBanner />
+        </div>
         <p className="mb-4 text-xs text-muted-foreground">
           This is the same try-on your shoppers get. Use a product photo from your store. It uses your credits (1 for the
           front view, 2 with side and back), and nothing is charged if the try-on fails.

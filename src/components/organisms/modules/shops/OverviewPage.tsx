@@ -4,6 +4,7 @@ import { CheckCircle2, Circle, Coins } from 'lucide-react';
 import Link from 'next/link';
 
 import { CreditDisplay } from '@/components/atom/CreditDisplay';
+import { LowCreditBanner } from '@/components/molecules/common/LowCreditBanner';
 import { PageHeaderWithAction } from '@/components/molecules/common/PageHeaderWithAction';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -68,6 +69,10 @@ export function OverviewPage() {
   return (
     <div className="min-h-screen">
       <PageHeaderWithAction title="Home" description="How your try-on button is doing" />
+
+      <div className="px-4 pt-4 max-sm:px-3 max-sm:pt-3 empty:hidden">
+        <LowCreditBanner />
+      </div>
 
       <div className="grid gap-4 p-4 max-sm:p-3 lg:grid-cols-[2fr_1fr]">
         <div className="grid content-start gap-4">

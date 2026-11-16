@@ -3,6 +3,7 @@
 import Link from 'next/link';
 
 import { LoadingScreen } from '@/components/atom/LoadingScreen';
+import { LowCreditBanner } from '@/components/molecules/common/LowCreditBanner';
 import { PageHeaderWithAction } from '@/components/molecules/common/PageHeaderWithAction';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -58,6 +59,7 @@ export function ShopDetailPage({ shopId }: { shopId: string }) {
             This shop has been suspended, so shoppers cannot use the button. Please contact support.
           </p>
         )}
+        <LowCreditBanner />
         <TestTryOnCard />
         <InstallSnippetCard shop={shop} />
         <ShopUsageCard shopId={shop.id} />
