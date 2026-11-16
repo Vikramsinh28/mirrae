@@ -50,6 +50,15 @@ describe('Shopify routes', () => {
       expect(service.markUninstalled).not.toHaveBeenCalled();
     });
 
+    test('refuses an oversized body before reading it all, and before checking anything else', async () => {
+      const huge = 'x'.repeat(300 * 1024);
+
+      const response = await post(webhook('app/uninstalled', { body: huge }));
+
+      expect(response.status).toBe(413);
+      expect(service.markUninstalled).not.toHaveBeenCalled();
+    });
+
     test('marks the shop uninstalled', async () => {
       const response = await post(webhook('app/uninstalled'));
 

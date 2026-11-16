@@ -6,16 +6,26 @@ import { shopifyAdminApi } from '@/services/api/shopify-admin';
 
 const overviewKey = (days: number) => ['shopifyOverview', days];
 
-/** The embedded admin page's data: App Bridge first (it provides the session token), then the shop overview. */
-export function useShopifyAdmin(apiKey: string, days: number) {
-  const queryClient = useQueryClient();
-
+/**
+ * App Bridge on its own: it provides the session token. Cheap and shared (one cached query per api key), so it is
+ * safe to call from several components; the data and the purchase sync live in useShopifyAdmin, which must be
+ * called only once per page.
+ */
+export function useAppBridge(apiKey: string) {
   const bridge = useQuery({
     queryKey: ['appBridge', apiKey],
     queryFn: () => loadAppBridge(apiKey),
     staleTime: Infinity,
     retry: false,
   });
+  return { bridge, embedded: bridge.isSuccess && bridge.data !== null };
+}
+
+/** The embedded admin page's data: the shop overview and the purchase sync. Call it ONCE, from the dashboard. */
+export function useShopifyAdmin(apiKey: string, days: number) {
+  const queryClient = useQueryClient();
+  const { bridge, embedded } = useAppBridge(apiKey);
+
   const appBridge = bridge.data ?? null;
   const getToken = useMemo(() => (appBridge ? () => appBridge.idToken() : null), [appBridge]);
 
@@ -55,5 +65,5 @@ export function useShopifyAdmin(apiKey: string, days: number) {
     onSuccess: ({ confirmationUrl }) => window.open(confirmationUrl, '_top'),
   });
 
-  return { bridge, overview, setLive, buy, creditedNow, embedded: bridge.isSuccess && bridge.data !== null };
+  return { bridge, overview, setLive, buy, creditedNow, embedded };
 }

@@ -46,7 +46,7 @@ export class ShopifyService {
    */
   private static async resolveShop(input: SessionInput): Promise<ResolvedShop> {
     const existing = await repo.findShopifyShop(input.shop);
-    if (existing && existing.status !== 'UNINSTALLED') return { ok: true, row: existing };
+    if (existing && existing.status !== 'UNINSTALLED' && !existing.uninstalledAt) return { ok: true, row: existing };
 
     let profile: ShopProfile;
     try {
@@ -62,7 +62,13 @@ export class ShopifyService {
     const allowedOrigins = allowedOriginsFor(input.shop, profile);
 
     if (existing) {
-      const back = await repo.reactivateShopifyShop(existing.id, { name: profile.name, contactEmail: profile.contactEmail, allowedOrigins });
+      const back = await repo.reactivateShopifyShop(existing.id, {
+        name: profile.name,
+        contactEmail: profile.contactEmail,
+        allowedOrigins,
+        // Only a shop that was live comes back live: a suspended or paused one keeps its status
+        status: existing.status === 'UNINSTALLED' ? 'ACTIVE' : existing.status,
+      });
       return { ok: true, row: back };
     }
 

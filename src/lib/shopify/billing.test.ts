@@ -26,11 +26,24 @@ describe('credit packs', () => {
 });
 
 describe('isBillingTest', () => {
-  test('is a test charge unless billing is explicitly switched to live', () => {
+  test('an explicit setting wins: only "true" bills for real, only "false" tests', () => {
+    expect(isBillingTest({ SHOPIFY_BILLING_LIVE: 'true', NODE_ENV: 'development' })).toBe(false);
+    expect(isBillingTest({ SHOPIFY_BILLING_LIVE: 'false', NODE_ENV: 'production' })).toBe(true);
+  });
+
+  test('unset: development and tests use test charges', () => {
+    expect(isBillingTest({ NODE_ENV: 'development' })).toBe(true);
+    expect(isBillingTest({ NODE_ENV: 'test' })).toBe(true);
     expect(isBillingTest({})).toBe(true);
-    expect(isBillingTest({ SHOPIFY_BILLING_LIVE: 'false' })).toBe(true);
-    expect(isBillingTest({ SHOPIFY_BILLING_LIVE: 'TRUE ' })).toBe(true);
-    expect(isBillingTest({ SHOPIFY_BILLING_LIVE: 'true' })).toBe(false);
+  });
+
+  test('unset in production bills for real, so a forgotten setting never gives free credits', () => {
+    expect(isBillingTest({ NODE_ENV: 'production' })).toBe(false);
+  });
+
+  test.each(['TRUE', 'True ', '1', 'yes', ''])('an unrecognised value %p falls back to the environment default', value => {
+    expect(isBillingTest({ SHOPIFY_BILLING_LIVE: value, NODE_ENV: 'production' })).toBe(false);
+    expect(isBillingTest({ SHOPIFY_BILLING_LIVE: value, NODE_ENV: 'development' })).toBe(true);
   });
 });
 

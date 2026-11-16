@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 
-import { conflictResponse, requireMerchant } from '@/app/api/shops/shop-route-helpers';
+import { conflictResponse, requireMerchant, tooManyChecksResponse } from '@/app/api/shops/shop-route-helpers';
 import { verificationLimiter } from '@/lib/shops/verification-limits';
-import { LOOKUP_FAILED_MESSAGE, NO_RECORD_MESSAGE, TOO_MANY_CHECKS_MESSAGE } from '@/lib/shops/verification-messages';
+import { LOOKUP_FAILED_MESSAGE, NO_RECORD_MESSAGE } from '@/lib/shops/verification-messages';
 import { internalServerErrorResponse, successResponse, validationErrorResponse } from '@/lib/utils/response/response';
 import { formatZodError } from '@/lib/utils/validation/validation';
 import { ShopVerificationService } from '@/services/internal/shop-verification';
@@ -37,12 +37,7 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) return validationErrorResponse('Invalid input data', formatZodError(parsed.error));
 
     const limit = verificationLimiter.check(`user:${merchant.userId}`);
-    if (!limit.allowed) {
-      return NextResponse.json(
-        { success: false, message: TOO_MANY_CHECKS_MESSAGE },
-        { status: 429, headers: { 'Retry-After': String(Math.ceil(limit.retryAfterMs / 1000)) } }
-      );
-    }
+    if (!limit.allowed) return tooManyChecksResponse(limit.retryAfterMs);
 
     const result = await ShopVerificationService.claim(merchant.userId, parsed.data);
     if (result.ok) return successResponse({ shop: result.shop }, 201);

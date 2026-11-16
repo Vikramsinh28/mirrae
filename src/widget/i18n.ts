@@ -25,6 +25,7 @@ export interface Strings {
   tryAnother: string;
   addToCart: string;
   saveImage: string;
+  saveHint: string;
   close: string;
   disclaimer: string;
   errors: {
@@ -64,6 +65,7 @@ export const STRINGS: Record<Locale, Strings> = {
     tryAnother: 'Try another photo',
     addToCart: 'Add to cart',
     saveImage: 'Save or share',
+    saveHint: 'Press and hold the picture (or right-click it) and choose Save image.',
     close: 'Close',
     disclaimer: 'A visual preview, not a size guarantee. The back view may be an estimate.',
     errors: {
@@ -100,6 +102,7 @@ export const STRINGS: Record<Locale, Strings> = {
     tryAnother: 'दूसरी फ़ोटो से आज़माएँ',
     addToCart: 'कार्ट में जोड़ें',
     saveImage: 'सेव या शेयर करें',
+    saveHint: 'तस्वीर को दबाकर रखें (या राइट-क्लिक करें) और इमेज सेव करना चुनें।',
     close: 'बंद करें',
     disclaimer: 'यह सिर्फ़ एक विज़ुअल अंदाज़ा है, साइज़ की गारंटी नहीं। पीछे का व्यू अनुमान पर बना हो सकता है।',
     errors: {
@@ -136,6 +139,7 @@ export const STRINGS: Record<Locale, Strings> = {
     tryAnother: 'جرّب بصورة أخرى',
     addToCart: 'أضف إلى السلة',
     saveImage: 'حفظ أو مشاركة',
+    saveHint: 'اضغط مطولاً على الصورة (أو انقر بزر الماوس الأيمن) واختر حفظ الصورة.',
     close: 'إغلاق',
     disclaimer: 'هذه معاينة بصرية فقط وليست ضماناً للمقاس. قد يكون العرض الخلفي تقديرياً.',
     errors: {

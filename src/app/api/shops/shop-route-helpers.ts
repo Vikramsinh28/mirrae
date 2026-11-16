@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+import { TOO_MANY_CHECKS_MESSAGE } from '@/lib/shops/verification-messages';
+
 import { getAuthUser } from '@/lib/auth/jwt';
 import { getUserById } from '@/services/repositories/user';
 import { z } from 'zod';
@@ -30,3 +32,10 @@ export const conflictResponse = (message: string, code?: string) =>
 
 export const forbiddenMessage = (message: string) =>
   NextResponse.json({ success: false, message }, { status: 403 });
+
+/** Too many DNS checks from this merchant: the same answer from the verify and claim routes. */
+export const tooManyChecksResponse = (retryAfterMs: number) =>
+  NextResponse.json(
+    { success: false, message: TOO_MANY_CHECKS_MESSAGE },
+    { status: 429, headers: { 'Retry-After': String(Math.ceil(retryAfterMs / 1000)) } }
+  );

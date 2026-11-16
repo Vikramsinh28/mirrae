@@ -19,6 +19,8 @@ interface State {
   error: string | null;
   result: DoneStatus | null;
   view: ViewName;
+  /** Saving by sharing or downloading was not possible: tell the shopper to press and hold the picture. */
+  saveByHand: boolean;
 }
 
 const INITIAL_STATE: State = {
@@ -30,6 +32,7 @@ const INITIAL_STATE: State = {
   error: null,
   result: null,
   view: 'front',
+  saveByHand: false,
 };
 
 // Set one property at a time: replacing the whole style attribute would wipe the host's --mirrae-color.
@@ -82,6 +85,12 @@ export function mountWidget(config: WidgetConfig): { open: () => void } {
   let opener: Element | null = null;
   let controller: AbortController | null = null;
   let uploadToken = 0;
+  // The host page's add-to-cart button, looked up once per open dialog instead of on every re-render
+  let cartLookup: { button: CartButtonLike | null } | null = null;
+  const getCartButton = (): CartButtonLike | null => {
+    cartLookup ??= { button: findCartButton(document, config.cartButton) };
+    return cartLookup.button;
+  };
 
   const setState = (patch: Partial<State>) => {
     state = { ...state, ...patch };
@@ -157,6 +166,7 @@ export function mountWidget(config: WidgetConfig): { open: () => void } {
     modal?.host.remove();
     modal = null;
     state = INITIAL_STATE;
+    cartLookup = null;
     if (opener instanceof HTMLElement) opener.focus();
   }
 
@@ -171,6 +181,7 @@ export function mountWidget(config: WidgetConfig): { open: () => void } {
   async function saveCurrent(url: string, view: ViewName) {
     const outcome = await shareImage(url);
     emit('share', { view, outcome });
+    if (outcome === 'manual') setState({ saveByHand: true });
     if (outcome === 'shared' || outcome === 'downloaded') void api.sendEvent('SHARED');
   }
 
@@ -234,7 +245,7 @@ export function mountWidget(config: WidgetConfig): { open: () => void } {
     const shown = views.filter(view => view.name === 'front' || (multi && (view.url || result.extrasPending)));
     const current = shown.find(view => view.name === state.view && view.url) ?? shown[0];
     // Looked up when the result appears so a product with no usable button simply gets no cart action.
-    const cartButton = findCartButton(document, config.cartButton);
+    const cartButton = getCartButton();
 
     return [
       el('div', { class: 'stage' }, el('img', { src: current.url ?? '', alt: `${strings.title}: ${current.label}` })),
@@ -253,6 +264,7 @@ export function mountWidget(config: WidgetConfig): { open: () => void } {
           )
         : null,
       result.extrasPending ? el('p', { class: 'note', role: 'status' }, strings.sideBackLoading) : null,
+      state.saveByHand ? el('p', { class: 'note', role: 'status' }, strings.saveHint) : null,
       el('p', { class: 'fine' }, strings.disclaimer),
       cartButton
         ? el('button', { type: 'button', class: 'go', onclick: () => addToCart(cartButton) }, strings.addToCart)

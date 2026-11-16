@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { readBodyCapped } from '@/lib/storefront/http';
 import { readShopifyConfig } from '@/lib/shopify/config';
 import { normalizeMyshopifyDomain } from '@/lib/shopify/shop-domain';
 import { verifyWebhookHmac } from '@/lib/shopify/webhook-hmac';
@@ -15,6 +16,9 @@ export const dynamic = 'force-dynamic';
  */
 const CUSTOMER_PRIVACY_TOPICS = ['customers/data_request', 'customers/redact'];
 
+// Real Shopify webhook bodies are small JSON; anything near this size is not one
+const MAX_WEBHOOK_BYTES = 256 * 1024;
+
 const ok = () => new NextResponse(null, { status: 200 });
 
 export async function POST(request: NextRequest) {
@@ -22,7 +26,10 @@ export async function POST(request: NextRequest) {
     const config = readShopifyConfig();
     if (!config) return new NextResponse(null, { status: 503 });
 
-    const rawBody = await request.text();
+    // This route is public: cap the body BEFORE reading it, because the signature can only be checked afterwards
+    const bytes = await readBodyCapped(request, MAX_WEBHOOK_BYTES);
+    if (!bytes) return new NextResponse(null, { status: 413 });
+    const rawBody = new TextDecoder().decode(bytes);
     if (!verifyWebhookHmac(rawBody, request.headers.get('x-shopify-hmac-sha256'), config.clientSecret)) {
       return new NextResponse(null, { status: 401 });
     }

@@ -75,8 +75,28 @@ describe('ShopifyService.ensureInstalled', () => {
       name: 'My Store',
       contactEmail: 'owner@example.com',
       allowedOrigins: [`https://${SHOP}`, 'https://www.example.com'],
+      status: 'ACTIVE',
     });
     expect(r.createShopifyShopWithOwner).not.toHaveBeenCalled();
+  });
+
+  test.each(['SUSPENDED', 'PAUSED'])('a %s shop that was uninstalled and reinstalled keeps its status, so uninstalling cannot lift a suspension', async status => {
+    r.findShopifyShop.mockResolvedValue({ ...row, status, uninstalledAt: new Date() } as never);
+    r.reactivateShopifyShop.mockResolvedValue({ ...row, status } as never);
+
+    await ShopifyService.ensureInstalled(input);
+
+    expect(r.reactivateShopifyShop).toHaveBeenCalledWith('shop-1', expect.objectContaining({ status }));
+  });
+
+  test('a shop stamped as uninstalled is not answered from the database even if its status was kept', async () => {
+    r.findShopifyShop.mockResolvedValue({ ...row, status: 'SUSPENDED', uninstalledAt: new Date() } as never);
+    r.reactivateShopifyShop.mockResolvedValue({ ...row, status: 'SUSPENDED' } as never);
+
+    await ShopifyService.ensureInstalled(input);
+
+    expect(profileMock).toHaveBeenCalled();
+    expect(r.reactivateShopifyShop).toHaveBeenCalled();
   });
 
   test('two first requests at once end with the same shop instead of an error', async () => {

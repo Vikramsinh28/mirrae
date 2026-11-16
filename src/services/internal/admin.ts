@@ -1,22 +1,13 @@
-import { PHOTO_PROBLEM_CODES } from '@/lib/constants/tryon';
 import { DAY_MS, startOfUtcDay } from '@/lib/time';
 import * as adminRepo from '@/services/repositories/admin';
 import * as shopRepo from '@/services/repositories/shop';
 import type { AdminShopsQuery } from '@/validations/admin-shops';
 
+import { summariseFailures } from './shop';
+
 /** What the operator of Mirrae sees across all merchants. Callers must already have checked that the user is an admin. */
 
 const RECENT_WINDOW_DAYS = 7;
-const OTHER_FAILURE = 'OTHER';
-
-const isPhotoProblem = (code: string): boolean => (PHOTO_PROBLEM_CODES as readonly string[]).includes(code);
-
-/** Named photo problems stay named; everything else is lumped, so internal error wording never reaches a report. */
-function summariseFailures(codes: { code: string; count: number }[]): { code: string; count: number }[] {
-  const named = codes.filter(item => isPhotoProblem(item.code));
-  const other = codes.filter(item => !isPhotoProblem(item.code)).reduce((sum, item) => sum + item.count, 0);
-  return other > 0 ? [...named, { code: OTHER_FAILURE, count: other }] : named;
-}
 
 export class AdminService {
   static async overview(days: number) {
@@ -79,7 +70,8 @@ export class AdminService {
   ): Promise<{ ok: true; status: string } | { ok: false; reason: 'NOT_FOUND' | 'LOCKED' }> {
     const shop = await shopRepo.findShopById(shopId);
     if (!shop) return { ok: false, reason: 'NOT_FOUND' };
-    if (shop.status === 'UNINSTALLED') return { ok: false, reason: 'LOCKED' };
+    // Uninstalled (even a suspended shop that kept its status) is the merchant's and Shopify's to bring back
+    if (shop.status === 'UNINSTALLED' || shop.uninstalledAt) return { ok: false, reason: 'LOCKED' };
 
     const updated = await shopRepo.updateShop(shop.id, { status });
     return { ok: true, status: updated.status };

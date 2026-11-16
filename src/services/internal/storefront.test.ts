@@ -106,6 +106,7 @@ describe('StorefrontService', () => {
       ['an unknown public key', () => shops.findShopByPublicKey.mockResolvedValue(null), 'UNKNOWN_SHOP'],
       ['a suspended shop', () => shops.findShopByPublicKey.mockResolvedValue({ ...shop, status: 'SUSPENDED' } as never), 'SHOP_INACTIVE'],
       ['an uninstalled shop', () => shops.findShopByPublicKey.mockResolvedValue({ ...shop, status: 'UNINSTALLED' } as never), 'SHOP_INACTIVE'],
+      ['a shop stamped as uninstalled', () => shops.findShopByPublicKey.mockResolvedValue({ ...shop, status: 'ACTIVE', uninstalledAt: new Date() } as never), 'SHOP_INACTIVE'],
       [
         'a website shop whose owner has not proved they own the website',
         () => shops.findShopByPublicKey.mockResolvedValue({ ...shop, platform: 'WEB', verifiedAt: null } as never),

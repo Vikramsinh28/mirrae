@@ -133,6 +133,13 @@ describe('AdminService.setShopStatus', () => {
     expect(shops.updateShop).not.toHaveBeenCalled();
   });
 
+  test('never lifts a suspension from a shop that is uninstalled but kept its SUSPENDED status', async () => {
+    shops.findShopById.mockResolvedValue({ id: 's', status: 'SUSPENDED', uninstalledAt: new Date() } as never);
+
+    expect(await AdminService.setShopStatus('s', 'ACTIVE')).toEqual({ ok: false, reason: 'LOCKED' });
+    expect(shops.updateShop).not.toHaveBeenCalled();
+  });
+
   test('says NOT_FOUND for an unknown shop', async () => {
     shops.findShopById.mockResolvedValue(null);
 

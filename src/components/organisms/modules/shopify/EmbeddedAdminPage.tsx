@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
-import { useShopifyAdmin } from '@/hooks/useShopifyAdmin';
+import { useAppBridge, useShopifyAdmin } from '@/hooks/useShopifyAdmin';
 import { creditLevel } from '@/lib/credits/level';
 import { CREDIT_PACKS } from '@/lib/shopify/billing';
 import { themeEditorLink } from '@/lib/shopify/links';
@@ -153,7 +153,7 @@ function Dashboard({ apiKey }: { apiKey: string }) {
 
 /** Mirrae's page inside the Shopify admin. Authenticated by the Shopify session token, never by a Mirrae login. */
 export function EmbeddedAdminPage({ apiKey }: { apiKey: string }) {
-  const { bridge, embedded } = useShopifyAdmin(apiKey, 30);
+  const { bridge, embedded } = useAppBridge(apiKey);
 
   return (
     <div className="mx-auto grid w-full max-w-3xl gap-4 p-4 max-sm:p-3">

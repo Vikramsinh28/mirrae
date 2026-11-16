@@ -32,8 +32,9 @@ type Rejected<Reason extends string> = { ok: false; reason: Reason; retryAfterMs
 
 type Authorized = { ok: true; shop: Shop; session: StorefrontSession } | Rejected<StorefrontFailure>;
 
-/** A shop serves shoppers only while it is live, and a website shop only once the merchant proved they own the website. */
-const isServable = (shop: Shop) => shop.status === 'ACTIVE' && (shop.platform !== 'WEB' || shop.verifiedAt !== null);
+/** A shop serves shoppers only while it is live and installed, and a website shop only once the merchant proved they own the website. */
+const isServable = (shop: Shop) =>
+  shop.status === 'ACTIVE' && !shop.uninstalledAt && (shop.platform !== 'WEB' || shop.verifiedAt !== null);
 
 const originAllowed = (shop: Shop, origin: string) => origin !== '' && shop.allowedOrigins.includes(origin);
 

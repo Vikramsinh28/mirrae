@@ -21,8 +21,16 @@ const PACKS_BY_ID = new Map(CREDIT_PACKS.map(pack => [pack.id, pack]));
 
 export const findPack = (id: string): CreditPack | null => PACKS_BY_ID.get(id) ?? null;
 
-/** Charges are test charges (nobody is billed) unless SHOPIFY_BILLING_LIVE is exactly "true". */
-export const isBillingTest = (env: Record<string, string | undefined> = process.env): boolean => env.SHOPIFY_BILLING_LIVE !== 'true';
+/**
+ * Whether new charges are Shopify TEST charges (nobody is billed, yet credits are still paid out). SHOPIFY_BILLING_LIVE
+ * decides when it is set ("true" bills for real, "false" tests). When it is unset, production bills for real and every
+ * other environment tests, so forgetting the setting in production can never hand out free credits.
+ */
+export const isBillingTest = (env: Record<string, string | undefined> = process.env): boolean => {
+  if (env.SHOPIFY_BILLING_LIVE === 'true') return false;
+  if (env.SHOPIFY_BILLING_LIVE === 'false') return true;
+  return env.NODE_ENV !== 'production';
+};
 
 export type PurchaseStatus = 'PENDING' | 'ACTIVE' | 'DECLINED' | 'EXPIRED';
 

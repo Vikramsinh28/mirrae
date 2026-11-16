@@ -1,18 +1,18 @@
 /**
  * Lets the shopper keep or share their try-on image. Phones get the native share sheet (WhatsApp, Instagram…),
  * desktops get a download. If the image cannot be fetched as a file (for example the storage bucket has no CORS
- * rule for this store yet) the image opens in a new tab so the shopper can still long-press or right-click it.
+ * rule for this store yet) nothing is opened: a new tab opened after the fetch would be blocked as a popup, since
+ * the click's user activation is gone by then. The caller tells the shopper to press and hold the picture instead.
  */
 
 const FILE_NAME = 'mirrae-try-on.jpg';
 
-export type ShareOutcome = 'shared' | 'downloaded' | 'opened' | 'cancelled';
+export type ShareOutcome = 'shared' | 'downloaded' | 'manual' | 'cancelled';
 
 export interface ShareDeps {
   fetch: typeof fetch;
   navigator: Pick<Navigator, 'canShare' | 'share'> | undefined;
   download: (blob: Blob, fileName: string) => void;
-  open: (url: string) => void;
 }
 
 function browserDownload(blob: Blob, fileName: string) {
@@ -30,7 +30,6 @@ const defaultDeps = (): ShareDeps => ({
   fetch: (...args) => fetch(...args),
   navigator: typeof navigator === 'undefined' ? undefined : navigator,
   download: browserDownload,
-  open: url => window.open(url, '_blank', 'noopener'),
 });
 
 export async function shareImage(url: string, deps: ShareDeps = defaultDeps()): Promise<ShareOutcome> {
@@ -40,8 +39,7 @@ export async function shareImage(url: string, deps: ShareDeps = defaultDeps()): 
     if (!response.ok) throw new Error('image not available');
     blob = await response.blob();
   } catch {
-    deps.open(url);
-    return 'opened';
+    return 'manual';
   }
 
   const file = new File([blob], FILE_NAME, { type: blob.type || 'image/jpeg' });

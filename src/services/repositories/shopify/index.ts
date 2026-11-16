@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 
 import { DEFAULT_INITIAL_CREDITS } from '@/lib/constants/credits';
 import { prisma } from '@/lib/prisma';
+import type { Shop } from '@/lib/prisma/generated/client';
 
 /** Data access for shops that came from the Shopify App Store. A Shopify shop's address is its myshopify.com host. */
 
@@ -52,20 +53,39 @@ export const createShopifyShopWithOwner = (data: NewShopifyShop) =>
     });
   });
 
-/** A returning merchant: back to ACTIVE with fresh details, keeping the public key (the code on their site still works). */
-export const reactivateShopifyShop = (id: string, data: { name: string; contactEmail: string | null; allowedOrigins: string[] }) =>
-  prisma.shop.update({ where: { id }, data: { ...data, status: 'ACTIVE', uninstalledAt: null } });
+/**
+ * A returning merchant: fresh details and the same public key (the code on their site still works). The caller
+ * decides the status: a shop that was live comes back live, but one an admin suspended (or the merchant paused)
+ * stays that way, so uninstalling and reinstalling cannot lift a suspension.
+ */
+export const reactivateShopifyShop = (
+  id: string,
+  data: { name: string; contactEmail: string | null; allowedOrigins: string[]; status: Shop['status'] }
+) => prisma.shop.update({ where: { id }, data: { ...data, uninstalledAt: null } });
 
-export const markShopifyShopUninstalled = (domain: string) =>
-  prisma.shop.updateMany({
-    where: { platform: PLATFORM, domain, status: { not: 'UNINSTALLED' } },
-    data: { status: 'UNINSTALLED', uninstalledAt: new Date() },
-  });
+/**
+ * The merchant uninstalled the app. A live shop becomes UNINSTALLED; a suspended or paused shop keeps its status
+ * and is only stamped as uninstalled (it was not being served anyway), so its status survives a reinstall.
+ */
+export const markShopifyShopUninstalled = async (domain: string): Promise<void> => {
+  const now = new Date();
+  await prisma.$transaction([
+    prisma.shop.updateMany({
+      where: { platform: PLATFORM, domain, uninstalledAt: null, status: 'ACTIVE' },
+      data: { status: 'UNINSTALLED', uninstalledAt: now },
+    }),
+    prisma.shop.updateMany({
+      where: { platform: PLATFORM, domain, uninstalledAt: null, status: { in: ['SUSPENDED', 'PAUSED'] } },
+      data: { uninstalledAt: now },
+    }),
+  ]);
+};
 
 /** Shopify asks for a store's data to be erased 48 hours after uninstall: the shop goes (and its events with it); its owner account is closed. */
 export async function eraseShopifyShop(domain: string): Promise<void> {
   const shop = await findShopifyShop(domain);
-  if (!shop) return;
+  // A merchant who reinstalled before the 48-hour erase request arrived is a customer again: nothing to erase
+  if (!shop || !shop.uninstalledAt) return;
 
   await prisma.$transaction([
     prisma.shop.delete({ where: { id: shop.id } }),

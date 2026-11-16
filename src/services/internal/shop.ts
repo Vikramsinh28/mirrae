@@ -76,10 +76,10 @@ function violatedFields(error: unknown): string[] {
 export const uniqueViolationOn = (error: unknown, field: string): boolean =>
   violatedFields(error).some(item => item === field || item.includes(`_${field}_`));
 
-const isPhotoProblem = (code: string): boolean => (PHOTO_PROBLEM_CODES as readonly string[]).includes(code);
+export const isPhotoProblem = (code: string): boolean => (PHOTO_PROBLEM_CODES as readonly string[]).includes(code);
 
 /** Named photo problems stay named; every other failure is lumped together so internal wording never reaches a report. */
-function summariseFailures(codes: { code: string; count: number }[]): { code: string; count: number }[] {
+export function summariseFailures(codes: { code: string; count: number }[]): { code: string; count: number }[] {
   const named = codes.filter(item => isPhotoProblem(item.code));
   const other = codes.filter(item => !isPhotoProblem(item.code)).reduce((sum, item) => sum + item.count, 0);
   return other > 0 ? [...named, { code: OTHER_FAILURE, count: other }] : named;

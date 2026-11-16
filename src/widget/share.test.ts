@@ -7,7 +7,6 @@ function makeDeps(overrides: Partial<ShareDeps> = {}): ShareDeps {
     fetch: jest.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(['x'], { type: 'image/jpeg' }) }),
     navigator: undefined,
     download: jest.fn(),
-    open: jest.fn(),
     ...overrides,
   };
 }
@@ -49,18 +48,18 @@ describe('shareImage', () => {
     expect(await shareImage(IMAGE_URL, deps)).toBe('downloaded');
   });
 
-  test('opens the image in a new tab when it cannot be fetched as a file', async () => {
+  test('asks the shopper to save the picture by hand when it cannot be fetched as a file, and opens nothing', async () => {
     const deps = makeDeps({ fetch: jest.fn().mockRejectedValue(new TypeError('CORS')) });
 
     const outcome = await shareImage(IMAGE_URL, deps);
 
-    expect(outcome).toBe('opened');
-    expect(deps.open).toHaveBeenCalledWith(IMAGE_URL);
+    expect(outcome).toBe('manual');
+    expect(deps.download).not.toHaveBeenCalled();
   });
 
-  test('opens the image in a new tab when the storage answers with an error', async () => {
+  test('does the same when the storage answers with an error', async () => {
     const deps = makeDeps({ fetch: jest.fn().mockResolvedValue({ ok: false }) });
 
-    expect(await shareImage(IMAGE_URL, deps)).toBe('opened');
+    expect(await shareImage(IMAGE_URL, deps)).toBe('manual');
   });
 });
