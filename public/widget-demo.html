@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Mirrae widget demo</title>
+  <style>
+    body { font-family: Georgia, serif; margin: 0; background: #f6f3ee; color: #222; }
+    main { max-width: 720px; margin: 0 auto; padding: 24px 16px 120px; }
+    .product { display: grid; grid-template-columns: 1fr; gap: 20px; }
+    @media (min-width: 640px) { .product { grid-template-columns: 1fr 1fr; } }
+    .photo { aspect-ratio: 3 / 4; background: #e6e0d6 center / contain no-repeat; border-radius: 6px; }
+    h1 { margin: 0 0 6px; font-size: 26px; }
+    .price { font-size: 20px; margin: 0 0 18px; }
+    .buy { padding: 12px 24px; border: 0; background: #222; color: #fff; font: inherit; border-radius: 2px; }
+    #try-on-slot { margin: 16px 0; min-height: 8px; }
+    .hint { overflow-wrap: anywhere; margin-top: 28px; padding: 12px; background: #fff; border: 1px dashed #bbb; font: 13px/1.5 system-ui, sans-serif; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="product">
+      <div class="photo" id="photo"></div>
+      <div>
+        <h1>Blue formal shirt</h1>
+        <p class="price">₹1,499</p>
+        <div id="try-on-slot"></div>
+        <button class="buy" type="button" data-add-to-cart onclick="document.title='Added to cart'">Add to cart</button>
+      </div>
+    </div>
+    <p class="hint">
+      Demo page for the Mirrae widget. Open it as
+      <code>/widget-demo.html?key=pk_live_...&amp;image=https://...&amp;lang=en&amp;slot=1</code>.
+      <code>slot=1</code> places the button in the slot above instead of floating at the corner.
+    </p>
+  </main>
+  <script>
+    (function () {
+      var params = new URLSearchParams(location.search);
+      var key = params.get('key');
+      var image = params.get('image');
+      if (!key) { document.querySelector('.hint').style.background = '#fdecec'; return; }
+      if (image) document.getElementById('photo').style.backgroundImage = 'url("' + image.replace(/"/g, '%22') + '")';
+      // ?mock=1 fakes the storefront API (no cost) to preview the widget's screens:
+      //   mock=1 normal, mock=noperson photo rejected, mock=noback back view fails, mock=capped unavailable
+      var mock = params.get('mock');
+      if (mock) {
+        var art = function (label, hue) {
+          return 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800"><rect width="600" height="800" fill="hsl(' + hue + ',40%,82%)"/><circle cx="300" cy="230" r="70" fill="hsl(' + hue + ',30%,55%)"/><rect x="190" y="320" width="220" height="360" rx="30" fill="hsl(' + hue + ',45%,45%)"/><text x="300" y="760" font-size="44" text-anchor="middle" fill="#222" font-family="sans-serif">' + label + '</text></svg>');
+        };
+        var polls = 0, realFetch = window.fetch.bind(window);
+        var json = function (status, body) { return new Response(JSON.stringify(body), { status: status, headers: { 'Content-Type': 'application/json' } }); };
+        var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+        window.fetch = async function (url, init) {
+          var path = String(url);
+          if (path.indexOf('/api/storefront/') === -1) return realFetch(url, init);
+          if (path.indexOf('/session') !== -1) return json(200, { success: true, data: { token: 't', shopName: 'Demo' } });
+          if (path.indexOf('/photo') !== -1) {
+            await wait(1200);
+            return mock === 'noperson'
+              ? json(422, { success: false, code: 'PHOTO_PROBLEM', problem: 'NO_PERSON', message: 'x' })
+              : json(200, { success: true, data: { photoKey: 'mock' } });
+          }
+          if (path.indexOf('/tryon') !== -1) {
+            return mock === 'capped'
+              ? json(503, { success: false, code: 'DAILY_CAP_REACHED', message: 'x' })
+              : json(202, { success: true, data: { jobId: '33333333-3333-4333-8333-333333333333' } });
+          }
+          polls += 1;
+          if (polls === 1) return json(200, { success: true, data: { status: 'processing' } });
+          var done = { status: 'done', resultUrl: art('Front', 210), viewCount: 3, extrasPending: polls < 4 };
+          if (polls >= 3) done.sideUrl = art('Side', 160);
+          if (polls >= 4 && mock !== 'noback') done.backUrl = art('Back', 20);
+          return json(200, { success: true, data: done });
+        };
+      }
+      var script = document.createElement('script');
+      script.async = true;
+      script.src = '/widget.js';
+      script.dataset.shopKey = key;
+      if (image) script.dataset.productImage = image;
+      if (params.get('lang')) script.dataset.lang = params.get('lang');
+      if (params.get('color')) script.dataset.color = params.get('color');
+      if (params.get('views')) script.dataset.views = params.get('views');
+      if (params.get('slot')) script.dataset.target = '#try-on-slot';
+      document.body.appendChild(script);
+    })();
+  </script>
+</body>
+</html>

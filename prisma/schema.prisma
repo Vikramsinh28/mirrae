@@ -1,0 +1,403 @@
+// schema.prisma 
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/lib/prisma/generated"
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum UserPlan {
+  FREE
+  PRO
+}
+
+enum OtpPurpose {
+  SIGNUP
+  PASSWORD_RESET
+}
+
+enum ContactPurpose {
+  ACCOUNT
+  BILLING
+  TECHNICAL_SUPPORT
+  FEATURE_REQUEST
+  BUG_REPORT
+  GENERAL_INQUIRY
+  OTHER
+}
+
+enum ContactStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+model User {
+  id                 Int                 @id @default(autoincrement())
+  googleId           String?             @unique
+  name               String
+  email              String              @unique
+  password           String? // Hashed password for non-Google users
+  profilePicture     String? // URL to the profile picture
+  role               UserRole            @default(USER)
+  isOnboarded        Boolean             @default(false)
+  credits            Float               @default(5.0) // Available credits; free trial amount, see DEFAULT_INITIAL_CREDITS
+  stripeCustomerId   String?             @unique
+  plan               UserPlan            @default(FREE)
+  isOverDue          Boolean             @default(false)
+  planExpiringAt     DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  deletedAt          DateTime? // Soft delete
+  files              File[]
+  creditHistory      CreditHistory[]
+  blogs              Blog[]
+  contactSubmissions ContactSubmission[]
+  emailTemplates     EmailTemplate[]
+  campaigns          Campaign[]
+  campaignRecipients CampaignRecipient[]
+  tryOnJobs          TryOnJob[]
+  shops              Shop[]
+}
+
+model Package {
+  id             Int      @id @default(autoincrement())
+  title          String
+  description    String
+  isFeatured     Boolean  @default(false)
+  price          Decimal
+  currencySymbol String   @default("$")
+  features       Json // JSON array of features
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model File {
+  id           Int       @id @default(autoincrement())
+  userId       Int?
+  filename     String
+  originalName String
+  mimeType     String
+  size         Int // File size in bytes
+  url          String? // Storage URL (S3, Supabase, etc.)
+  metadata     Json? // Additional file metadata
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime? // Soft delete
+  user         User?     @relation(fields: [userId], references: [id])
+}
+
+model CreditHistory {
+  id           Int                   @id @default(autoincrement())
+  userId       Int
+  type         CreditTransactionType
+  operation    CreditOperation
+  amount       Float // Amount of credits (positive for credit, negative for debit)
+  balanceAfter Float // Balance after this transaction
+  objectId     String? // Related object ID (messageId, searchQueryId, etc.)
+  description  String? // Optional description
+  createdAt    DateTime              @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+enum CreditTransactionType {
+  CREDIT
+  DEBIT
+}
+
+enum CreditOperation {
+  INITIAL_CREDITS
+  TRYON
+}
+
+enum ShopPlatform {
+  WEB
+  SHOPIFY
+  WOOCOMMERCE
+  API
+}
+
+enum ShopStatus {
+  ACTIVE
+  SUSPENDED // Set by us (abuse, billing); the merchant cannot undo it
+  UNINSTALLED
+  PAUSED // Set by the merchant to stop try-ons (and spend) immediately; they can resume
+}
+
+// A storefront that embeds the try-on widget. Its try-ons are paid from the owner's credits.
+model Shop {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerId        Int // The merchant (User) whose credits pay for this shop's try-ons
+  name           String
+  platform       ShopPlatform @default(WEB)
+  domain         String // Store domain without scheme, e.g. store.myshopify.com
+  publicKey      String       @unique // pk_..., safe to embed in storefront pages
+  allowedOrigins String[] // Exact origins the widget may run on, e.g. https://www.example.com
+  imageHosts     String[] // Hosts product images may be downloaded from (SSRF allowlist)
+  status         ShopStatus   @default(ACTIVE)
+  dailyTryOnCap  Int          @default(200) // Max try-ons started per UTC day across all shoppers
+  contactEmail   String? // Shopify stores: the store contact email as Shopify states it. Self-asserted: never used to link accounts
+  uninstalledAt  DateTime? // Shopify stores: when the app was uninstalled; cleared on reinstall
+  verifiedAt     DateTime? // When the merchant proved they own the website (DNS record). Shopify shops are verified by Shopify. WEB shops are not served until this is set
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  tryOnJobs TryOnJob[]
+  events    StorefrontEvent[]
+  charges   ShopifyCharge[]
+
+  @@unique([platform, domain])
+  @@index([ownerId])
+}
+
+enum ShopifyChargeStatus {
+  PENDING
+  ACTIVE
+  DECLINED
+  EXPIRED
+}
+
+// One credit pack bought through Shopify Billing. creditedAt is set in the same transaction that adds the credits,
+// so a charge is paid out exactly once even if the session sync and the webhook both see it. Kept (with shopId
+// cleared) when a shop is erased, because it is a financial record.
+model ShopifyCharge {
+  id         String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  shopId     String?             @db.Uuid
+  shopDomain String
+  gid        String              @unique // gid://shopify/AppPurchaseOneTime/123
+  packId     String
+  credits    Float
+  priceUsd   Decimal             @db.Decimal(10, 2)
+  test       Boolean // Test charges are never billed to the merchant, but still add credits in development
+  status     ShopifyChargeStatus @default(PENDING)
+  creditedAt DateTime?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  shop Shop? @relation(fields: [shopId], references: [id], onDelete: SetNull)
+
+  @@index([shopId, status])
+}
+
+enum StorefrontEventType {
+  WIDGET_OPENED
+  RESULT_VIEWED
+  ADD_TO_CART
+  SHARED
+}
+
+// What shoppers did in the widget, for the merchant's conversion numbers. No personal data: the session id is
+// an anonymous random id and no photo, IP or user agent is stored.
+model StorefrontEvent {
+  id        String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  shopId    String              @db.Uuid
+  sessionId String
+  jobId     String?             @db.Uuid
+  type      StorefrontEventType
+  createdAt DateTime            @default(now())
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, type, createdAt])
+}
+
+enum TryOnStatus {
+  QUEUED
+  PROCESSING
+  DONE
+  FAILED
+}
+
+model TryOnJob {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          Int
+  personImageKey  String // Shopper photo; deleted after the result is saved
+  productImageKey String
+  resultImageKey  String? // Front view, stored in the private bucket
+  viewCount       Int         @default(1) // 1 = front only (1 credit), 3 = front + side + back (2 credits)
+  sideImageKey    String?
+  backImageKey    String?
+  extrasSettledAt DateTime? // Set once no extra view is still being generated; the charge waits for it
+  status          TryOnStatus @default(QUEUED)
+  error           String?
+  consentAt       DateTime // Shopper consent to process the photo
+  chargedAt       DateTime? // Set once when the credits for this job are deducted
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  expiresAt       DateTime
+  shopId          String?     @db.Uuid // Set for storefront try-ons; userId is then the shop owner
+  sessionId       String? // Anonymous shopper session that started a storefront try-on
+
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shop Shop? @relation(fields: [shopId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([status, updatedAt])
+  @@index([shopId, createdAt])
+}
+
+model Blog {
+  id           Int      @id @default(autoincrement())
+  title        String
+  slug         String   @unique
+  content      String
+  tags         String[] // Tags stored as array
+  blogImageUrl String?  @db.VarChar(255)
+  published    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  authorId     Int // References User
+
+  author     User           @relation(fields: [authorId], references: [id])
+  categories BlogCategory[]
+}
+
+model Category {
+  id        Int            @id @default(autoincrement())
+  name      String         @unique
+  slug      String         @unique
+  createdAt DateTime       @default(now()) @db.Timestamptz()
+  updatedAt DateTime       @default(now()) @db.Timestamptz()
+  blogs     BlogCategory[]
+}
+
+model BlogCategory {
+  blogId     Int
+  categoryId Int
+
+  blog     Blog     @relation(fields: [blogId], references: [id])
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@id([blogId, categoryId])
+}
+
+model EmailOTP {
+  id         Int        @id @default(autoincrement())
+  email      String
+  otp        String
+  purpose    OtpPurpose
+  expiringAt DateTime
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@index([email, purpose])
+  @@index([expiringAt])
+}
+
+model ContactSubmission {
+  id         Int            @id @default(autoincrement())
+  uuid       String         @unique @default(dbgenerated("gen_random_uuid()"))
+  userId     Int? // Optional - if user is logged in
+  name       String
+  email      String
+  purpose    ContactPurpose
+  message    String
+  status     ContactStatus  @default(NEW)
+  adminNotes String? // Admin can add notes
+  resolvedAt DateTime? // When the issue was resolved
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  deletedAt  DateTime? // Soft delete
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([status])
+  @@index([purpose])
+  @@index([createdAt])
+}
+
+enum EmailType {
+  TRANSACTIONAL
+  PROMOTIONAL
+}
+
+enum CampaignStatus {
+  SCHEDULED
+  SENT
+  FAILED
+  PARTIALLYSUCCESS
+}
+
+enum CampaignRecipientStatus {
+  PENDING
+  SENT
+  FAILED
+  OPENED
+  CLICKED
+}
+
+model EmailTemplate {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  name         String
+  subject      String
+  fromEmail    String
+  fromName     String
+  replyToEmail String?
+  emailType    EmailType @default(TRANSACTIONAL)
+  body         String
+  variables    String[] // Store variable names as array of strings
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime? // Soft delete
+
+  user      User       @relation(fields: [userId], references: [id])
+  campaigns Campaign[]
+
+  @@index([userId])
+  @@index([emailType])
+}
+
+model Campaign {
+  id              Int            @id @default(autoincrement())
+  userId          Int
+  name            String
+  emailTemplateId Int
+  description     String?
+  status          CampaignStatus @default(SCHEDULED)
+  scheduledAt     DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  user          User                @relation(fields: [userId], references: [id])
+  emailTemplate EmailTemplate       @relation(fields: [emailTemplateId], references: [id])
+  recipients    CampaignRecipient[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([scheduledAt])
+}
+
+model CampaignRecipient {
+  id           Int                     @id @default(autoincrement())
+  campaignId   Int
+  userId       Int
+  status       CampaignRecipientStatus @default(PENDING)
+  emailBody    String? // Complete HTML email body
+  errorMessage String? // Error message if email delivery fails
+  sentAt       DateTime?
+  openedAt     DateTime?
+  clickedAt    DateTime?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@index([campaignId])
+  @@index([userId])
+  @@index([status])
+}
