@@ -18,9 +18,9 @@ import { AdminCreditsCard } from './AdminCreditsCard';
 
 function Fact({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="grid gap-0.5">
+    <div className="grid min-w-0 gap-0.5">
       <dt className="text-text-muted text-[11px]">{label}</dt>
-      <dd className="text-text text-xs break-words">{value}</dd>
+      <dd className="text-text text-xs break-all">{value}</dd>
     </div>
   );
 }
@@ -61,7 +61,7 @@ function Details({ detail }: { detail: AdminShopDetail }) {
           <Fact label="Created" value={formatDate(shop.createdAt)} />
           <Fact label="Verified" value={shop.platform === 'SHOPIFY' ? 'By Shopify' : formatDate(shop.verifiedAt)} />
           <Fact label="Daily limit" value={`${shop.dailyTryOnCap} try-ons`} />
-          <Fact label="Allowed websites" value={shop.allowedOrigins.join(', ') || '–'} />
+          <Fact label="Allowed websites" value={shop.allowedOrigins.length === 0 ? '–' : shop.allowedOrigins.map(origin => <div key={origin}>{origin}</div>)} />
         </dl>
         {setStatus.isError && <p role="alert" className="text-destructive text-xs">Could not change the shop. Please try again.</p>}
         {canChange && (
