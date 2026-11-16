@@ -3,6 +3,7 @@ import {
   File,
   FileText,
   Home,
+  LayoutDashboard,
   ListChecks,
   Mail,
   MessageSquare,
@@ -95,6 +96,18 @@ export const NAVIGATION_ITEMS: NavigationSection[] = [
     label: "Admin",
     type: "link",
     items: [
+      {
+        title: "Overview",
+        url: siteConfig.baseLinks.admin.dashboard,
+        icon: LayoutDashboard,
+        roles: [ADMIN],
+      },
+      {
+        title: "All Shops",
+        url: siteConfig.baseLinks.admin.shops,
+        icon: Store,
+        roles: [ADMIN],
+      },
       {
         title: "Packages",
         url: siteConfig.baseLinks.packages,

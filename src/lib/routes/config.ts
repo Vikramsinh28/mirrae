@@ -78,6 +78,12 @@ export const ALL_ROUTES: RouteConfig[] = [
   // Admin pages - require admin role
   { path: '/app/admin', isPublic: false, accessTo: { GET: [ADMIN] } },
   { path: '/app/admin/users', isPublic: false, accessTo: { GET: [ADMIN] } },
+  { path: '/app/admin/shops', isPublic: false, accessTo: { GET: [ADMIN] } },
+
+  // API routes - admin overview and shops (every handler also checks the admin role itself)
+  { path: '/api/admin/stats', isPublic: false, accessTo: { GET: [ADMIN] } },
+  { path: '/api/admin/shops', isPublic: false, accessTo: { GET: [ADMIN] } },
+  { path: '/api/admin/shops/[id]', isPublic: false, accessTo: { PATCH: [ADMIN] } },
 
   // API routes - packages
   {

@@ -28,6 +28,7 @@ export const siteConfig = {
     admin: {
       dashboard: '/app/admin',
       users: '/app/admin/users',
+      shops: '/app/admin/shops',
     },
 
     // Other routes

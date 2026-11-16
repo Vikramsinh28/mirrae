@@ -21,7 +21,7 @@ const STATUS_BADGES: Record<string, { label: string; variant: 'success' | 'error
   PROCESSING: { label: 'Working', variant: 'info' },
 };
 
-function Stat({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
+export function Stat({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
     <div className="bg-muted/40 rounded-lg p-3">
       <p className="text-text-muted text-xs">{label}</p>
