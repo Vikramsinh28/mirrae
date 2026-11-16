@@ -124,9 +124,9 @@ export class ShopService {
     return shops.map(shop => ({ ...toView(shop), tryOnsLast7Days: counts.get(shop.id) ?? 0 }));
   }
 
-  /** Which getting-started steps can only be known from the data (the rest come from the shops list). */
-  static async setupStatus(ownerId: number): Promise<{ testedTryOn: boolean }> {
-    return { testedTryOn: await repo.hasFinishedOwnTryOn(ownerId) };
+  /** The getting-started facts the checklist cannot work out from the shops list. */
+  static async setupStatus(ownerId: number): Promise<repo.SetupFacts> {
+    return repo.getSetupFacts(ownerId);
   }
 
   static async get(ownerId: number, shopId: string): Promise<ShopView | null> {

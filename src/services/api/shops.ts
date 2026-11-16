@@ -1,3 +1,4 @@
+import type { SetupFacts } from '@/lib/shops/setup-checklist';
 import { axios } from '@/lib/utils';
 
 export type ShopStatus = 'ACTIVE' | 'PAUSED' | 'SUSPENDED' | 'UNINSTALLED';
@@ -56,9 +57,7 @@ const unwrap = <T>(response: { data?: { data?: T } }): T => {
   return response.data.data;
 };
 
-export interface SetupStatus {
-  testedTryOn: boolean;
-}
+export type SetupStatus = SetupFacts;
 
 export const shopsApi = {
   setupStatus: async (): Promise<SetupStatus> => unwrap<SetupStatus>(await axios.get('/shops/setup-status')),

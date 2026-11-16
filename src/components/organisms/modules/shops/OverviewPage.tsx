@@ -9,32 +9,51 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSetupStatus, useShops } from '@/hooks/useShops';
+import { buildChecklist, type Checklist as ChecklistModel } from '@/lib/shops/setup-checklist';
 import { openCreditPurchase } from '@/store/ui/modals';
 
-interface ChecklistItem {
-  label: string;
-  done: boolean;
-  href: string;
-  action: string;
-}
+function Checklist({ checklist }: { checklist: ChecklistModel }) {
+  const percent = Math.round((checklist.doneCount / checklist.total) * 100);
 
-function Checklist({ items }: { items: ChecklistItem[] }) {
   return (
-    <ol className="grid gap-2">
-      {items.map(item => (
-        <li key={item.label} className="flex items-center justify-between gap-3 text-xs">
-          <span className="flex items-center gap-2">
-            {item.done ? <CheckCircle2 className="size-4 text-emerald-600" aria-label="Done" /> : <Circle className="text-text-muted size-4" aria-label="To do" />}
-            <span className={item.done ? 'text-text-muted line-through' : 'text-text'}>{item.label}</span>
+    <div className="grid gap-3">
+      <div>
+        <div className="text-text-muted mb-1 flex justify-between text-[11px]">
+          <span>
+            {checklist.doneCount} of {checklist.total} done
           </span>
-          {!item.done && (
-            <Button asChild size="sm" variant="outline">
-              <Link href={item.href}>{item.action}</Link>
-            </Button>
-          )}
-        </li>
-      ))}
-    </ol>
+        </div>
+        <div className="bg-muted h-1.5 overflow-hidden rounded-full" role="progressbar" aria-label="Setup progress" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
+          <div className="bg-primary h-full rounded-full transition-[width]" style={{ width: `${percent}%` }} />
+        </div>
+      </div>
+
+      <ol className="grid gap-3">
+        {checklist.steps.map(step => {
+          const isNext = checklist.next?.id === step.id;
+          return (
+            <li key={step.id} className="flex items-start justify-between gap-3 text-xs">
+              <span className="flex items-start gap-2">
+                {step.done ? (
+                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" aria-label="Done" />
+                ) : (
+                  <Circle className="text-text-muted mt-0.5 size-4 shrink-0" aria-label="To do" />
+                )}
+                <span>
+                  <span className={step.done ? 'text-text-muted line-through' : 'text-text font-medium'}>{step.label}</span>
+                  {!step.done && <span className="text-text-muted block">{step.hint}</span>}
+                </span>
+              </span>
+              {!step.done && (
+                <Button asChild size="sm" variant={isNext ? 'default' : 'outline'} className="shrink-0">
+                  <Link href={step.href}>{step.action}</Link>
+                </Button>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }
 
@@ -44,19 +63,7 @@ export function OverviewPage() {
 
   const shopCount = shops?.length ?? 0;
   const tryOns = shops?.reduce((sum, shop) => sum + shop.tryOnsLast7Days, 0) ?? 0;
-  const firstShop = shops?.[0];
-
-  const checklist: ChecklistItem[] = [
-    { label: 'Add your shop', done: shopCount > 0, href: '/app/shops', action: 'Add shop' },
-    { label: 'Try it on your own product', done: setup?.testedTryOn ?? false, href: '/app/try', action: 'Try it' },
-    {
-      label: 'Paste the code on your website',
-      done: tryOns > 0,
-      href: firstShop ? `/app/shops/${firstShop.id}` : '/app/shops',
-      action: 'Get the code',
-    },
-    { label: 'Get your first shopper try-on', done: tryOns > 0, href: firstShop ? `/app/shops/${firstShop.id}` : '/app/shops', action: 'See how' },
-  ];
+  const checklist = buildChecklist(shops ?? [], setup);
 
   return (
     <div className="min-h-screen">
@@ -115,13 +122,15 @@ export function OverviewPage() {
           </Card>
         </div>
 
-        <Card className="content-start">
+        <Card className={`content-start ${checklist.complete ? '' : 'max-lg:order-first'}`}>
           <CardHeader>
-            <CardTitle>Get started</CardTitle>
-            <CardDescription>Four steps to your first shopper try-on.</CardDescription>
+            <CardTitle>{checklist.complete ? 'You are all set' : 'Get started'}</CardTitle>
+            <CardDescription>
+              {checklist.complete ? 'Your try-on button is live and shoppers are using it.' : 'Four steps to your first shopper try-on.'}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <Checklist items={checklist} />
+            <Checklist checklist={checklist} />
           </CardContent>
         </Card>
       </div>

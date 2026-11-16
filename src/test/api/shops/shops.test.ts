@@ -279,12 +279,12 @@ describe('Shops API', () => {
     });
 
     test("answers for the signed-in merchant only", async () => {
-      service.setupStatus.mockResolvedValue({ testedTryOn: true });
+      service.setupStatus.mockResolvedValue({ testedTryOn: true, installed: false, shopperTryOn: false });
 
       const response = await get();
 
       expect(response.status).toBe(200);
-      expect((await response.json()).data).toEqual({ testedTryOn: true });
+      expect((await response.json()).data).toEqual({ testedTryOn: true, installed: false, shopperTryOn: false });
       expect(service.setupStatus).toHaveBeenCalledWith(user.id);
     });
   });

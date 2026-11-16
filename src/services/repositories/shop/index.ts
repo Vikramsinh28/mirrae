@@ -76,11 +76,21 @@ export async function getShopUsage(shopId: string, since: Date) {
   };
 }
 
-/** Whether the merchant has ever finished a try-on of their own (not a shopper's) with the dashboard tester. */
-export async function hasFinishedOwnTryOn(ownerId: number): Promise<boolean> {
-  const job = await prisma.tryOnJob.findFirst({
-    where: { userId: ownerId, shopId: null, status: 'DONE' },
-    select: { id: true },
-  });
-  return job !== null;
+export interface SetupFacts {
+  /** A finished try-on of their own, made with the dashboard tester. */
+  testedTryOn: boolean;
+  /** Shoppers have used the widget on one of their shops (any try-on or widget event): the code is on the site. */
+  installed: boolean;
+  /** A try-on that a shopper started on one of their shops. */
+  shopperTryOn: boolean;
+}
+
+/** What the getting-started checklist cannot work out from the shops list alone. */
+export async function getSetupFacts(ownerId: number): Promise<SetupFacts> {
+  const [ownJob, shopperJob, event] = await Promise.all([
+    prisma.tryOnJob.findFirst({ where: { userId: ownerId, shopId: null, status: 'DONE' }, select: { id: true } }),
+    prisma.tryOnJob.findFirst({ where: { userId: ownerId, shopId: { not: null } }, select: { id: true } }),
+    prisma.storefrontEvent.findFirst({ where: { shop: { ownerId } }, select: { id: true } }),
+  ]);
+  return { testedTryOn: ownJob !== null, installed: shopperJob !== null || event !== null, shopperTryOn: shopperJob !== null };
 }

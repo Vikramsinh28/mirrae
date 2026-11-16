@@ -316,11 +316,12 @@ describe('ShopService', () => {
   });
 
   describe('setupStatus', () => {
-    test.each([true, false])('reports whether the merchant has finished a try-on of their own: %p', async finished => {
-      r.hasFinishedOwnTryOn.mockResolvedValue(finished);
+    test('passes on what the data says about this merchant', async () => {
+      const facts = { testedTryOn: true, installed: true, shopperTryOn: false };
+      r.getSetupFacts.mockResolvedValue(facts);
 
-      await expect(ShopService.setupStatus(OWNER)).resolves.toEqual({ testedTryOn: finished });
-      expect(r.hasFinishedOwnTryOn).toHaveBeenCalledWith(OWNER);
+      await expect(ShopService.setupStatus(OWNER)).resolves.toEqual(facts);
+      expect(r.getSetupFacts).toHaveBeenCalledWith(OWNER);
     });
   });
 });
