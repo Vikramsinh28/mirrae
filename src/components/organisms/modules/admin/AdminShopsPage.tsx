@@ -45,10 +45,10 @@ function ShopRow({ shop, onChange, busy }: { shop: AdminShop; onChange: (id: str
           {shop.platform === 'WEB' && shop.verifiedAt === null && <Badge variant="warning">Not verified</Badge>}
         </div>
       </TableCell>
-      <TableCell className="text-text-muted">{ownerLabel(shop)}</TableCell>
+      <TableCell className="text-text-muted hidden xl:table-cell">{ownerLabel(shop)}</TableCell>
       <TableCell className="text-right">{shop.owner.credits.toFixed(1)}</TableCell>
       <TableCell className="text-right">{shop.tryOnsLast7Days}</TableCell>
-      <TableCell className="text-right">
+      <TableCell className="text-right whitespace-nowrap">
         {canChange && (
           <Button type="button" size="sm" variant={suspended ? 'outline' : 'destructive'} disabled={busy} onClick={handleClick}>
             {suspended ? 'Let back in' : 'Suspend'}
@@ -120,9 +120,9 @@ export function AdminShopsPage() {
                     <TableHead>Shop</TableHead>
                     <TableHead>Platform</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Owner</TableHead>
+                    <TableHead className="hidden xl:table-cell">Owner</TableHead>
                     <TableHead className="text-right">Credits</TableHead>
-                    <TableHead className="text-right">Try-ons, 7 days</TableHead>
+                    <TableHead className="text-right">Try-ons (7d)</TableHead>
                     <TableHead />
                   </TableRow>
                 </TableHeader>

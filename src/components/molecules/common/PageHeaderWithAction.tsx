@@ -34,7 +34,7 @@ export function PageHeaderWithAction({
         <SidebarTrigger className="-ml-1" />
         <div className="min-w-0">
           <h1 className="text-lg font-medium text-text truncate">{title}</h1>
-          {!description && <p className="text-xs text-text-muted truncate">{description}</p>}
+          {description && <p className="text-xs text-text-muted truncate">{description}</p>}
         </div>
       </div>
       {(onAdd || onFilter || actions) && (
