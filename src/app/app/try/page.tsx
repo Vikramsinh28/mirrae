@@ -77,9 +77,13 @@ export default function TryOnPage() {
 
   return (
     <div className="min-h-screen">
-      <PageHeaderWithAction title="Try on" description="Upload a photo and a product image" />
+      <PageHeaderWithAction title="Try it on your product" description="See what your shoppers will see" />
 
       <div className="mx-auto w-full max-w-lg p-4 max-sm:p-3">
+        <p className="mb-4 text-xs text-muted-foreground">
+          This is the same try-on your shoppers get. Use a product photo from your store. It uses your credits (1 for the
+          front view, 2 with side and back), and nothing is charged if the try-on fails.
+        </p>
         {status?.status === 'done' ? (
           <div className="flex flex-col gap-4">
             <TryOnResultGallery result={status} />

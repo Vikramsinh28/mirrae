@@ -11,6 +11,10 @@ export function useShops() {
   return useQuery({ queryKey: shopsKey, queryFn: shopsApi.list });
 }
 
+export function useSetupStatus() {
+  return useQuery({ queryKey: ['shopSetup'], queryFn: shopsApi.setupStatus });
+}
+
 export function useShop(id: string) {
   return useQuery({ queryKey: shopKey(id), queryFn: () => shopsApi.get(id), enabled: !!id });
 }

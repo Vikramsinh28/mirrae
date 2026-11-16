@@ -8,7 +8,7 @@ import { PageHeaderWithAction } from '@/components/molecules/common/PageHeaderWi
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useShops } from '@/hooks/useShops';
+import { useSetupStatus, useShops } from '@/hooks/useShops';
 import { openCreditPurchase } from '@/store/ui/modals';
 
 interface ChecklistItem {
@@ -40,6 +40,7 @@ function Checklist({ items }: { items: ChecklistItem[] }) {
 
 export function OverviewPage() {
   const { data: shops, isLoading } = useShops();
+  const { data: setup } = useSetupStatus();
 
   const shopCount = shops?.length ?? 0;
   const tryOns = shops?.reduce((sum, shop) => sum + shop.tryOnsLast7Days, 0) ?? 0;
@@ -47,6 +48,7 @@ export function OverviewPage() {
 
   const checklist: ChecklistItem[] = [
     { label: 'Add your shop', done: shopCount > 0, href: '/app/shops', action: 'Add shop' },
+    { label: 'Try it on your own product', done: setup?.testedTryOn ?? false, href: '/app/try', action: 'Try it' },
     {
       label: 'Paste the code on your website',
       done: tryOns > 0,
@@ -116,7 +118,7 @@ export function OverviewPage() {
         <Card className="content-start">
           <CardHeader>
             <CardTitle>Get started</CardTitle>
-            <CardDescription>Three steps to your first try-on.</CardDescription>
+            <CardDescription>Four steps to your first shopper try-on.</CardDescription>
           </CardHeader>
           <CardContent>
             <Checklist items={checklist} />

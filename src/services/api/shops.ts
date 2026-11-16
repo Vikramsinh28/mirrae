@@ -56,7 +56,13 @@ const unwrap = <T>(response: { data?: { data?: T } }): T => {
   return response.data.data;
 };
 
+export interface SetupStatus {
+  testedTryOn: boolean;
+}
+
 export const shopsApi = {
+  setupStatus: async (): Promise<SetupStatus> => unwrap<SetupStatus>(await axios.get('/shops/setup-status')),
+
   list: async (): Promise<ShopListItem[]> => unwrap<{ shops: ShopListItem[] }>(await axios.get('/shops')).shops,
 
   get: async (id: string): Promise<Shop> => unwrap<{ shop: Shop }>(await axios.get(`/shops/${id}`)).shop,

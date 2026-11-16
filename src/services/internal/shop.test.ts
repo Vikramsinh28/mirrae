@@ -314,4 +314,13 @@ describe('ShopService', () => {
       expect(r.getShopUsage).not.toHaveBeenCalled();
     });
   });
+
+  describe('setupStatus', () => {
+    test.each([true, false])('reports whether the merchant has finished a try-on of their own: %p', async finished => {
+      r.hasFinishedOwnTryOn.mockResolvedValue(finished);
+
+      await expect(ShopService.setupStatus(OWNER)).resolves.toEqual({ testedTryOn: finished });
+      expect(r.hasFinishedOwnTryOn).toHaveBeenCalledWith(OWNER);
+    });
+  });
 });

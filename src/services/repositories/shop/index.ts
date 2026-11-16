@@ -75,3 +75,12 @@ export async function getShopUsage(shopId: string, since: Date) {
     recent,
   };
 }
+
+/** Whether the merchant has ever finished a try-on of their own (not a shopper's) with the dashboard tester. */
+export async function hasFinishedOwnTryOn(ownerId: number): Promise<boolean> {
+  const job = await prisma.tryOnJob.findFirst({
+    where: { userId: ownerId, shopId: null, status: 'DONE' },
+    select: { id: true },
+  });
+  return job !== null;
+}

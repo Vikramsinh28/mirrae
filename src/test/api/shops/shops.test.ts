@@ -12,7 +12,7 @@ jest.mock('@/lib/auth/jwt', () => ({ getAuthUser: jest.fn(), JWT_KEY: 'auth-toke
 jest.mock('@/services/repositories/user', () => ({ getUserById: jest.fn() }));
 jest.mock('@/services/internal/shop', () => ({
   MAX_SHOPS_PER_OWNER: 5,
-  ShopService: { create: jest.fn(), list: jest.fn(), get: jest.fn(), update: jest.fn(), rotateKey: jest.fn(), usage: jest.fn() },
+  ShopService: { create: jest.fn(), list: jest.fn(), get: jest.fn(), update: jest.fn(), rotateKey: jest.fn(), usage: jest.fn(), setupStatus: jest.fn() },
 }));
 
 const auth = getAuthUser as jest.MockedFunction<typeof getAuthUser>;
@@ -262,6 +262,30 @@ describe('Shops API', () => {
     test('needs a login', async () => {
       signIn(false);
       expect((await usage()).status).toBe(401);
+    });
+  });
+
+  describe('GET /api/shops/setup-status', () => {
+    const get = async () => {
+      const { GET } = await import('@/app/api/shops/setup-status/route');
+      return GET(call('http://localhost/api/shops/setup-status'));
+    };
+
+    test('needs a signed-in merchant', async () => {
+      signIn(false);
+
+      expect((await get()).status).toBe(401);
+      expect(service.setupStatus).not.toHaveBeenCalled();
+    });
+
+    test("answers for the signed-in merchant only", async () => {
+      service.setupStatus.mockResolvedValue({ testedTryOn: true });
+
+      const response = await get();
+
+      expect(response.status).toBe(200);
+      expect((await response.json()).data).toEqual({ testedTryOn: true });
+      expect(service.setupStatus).toHaveBeenCalledWith(user.id);
     });
   });
 });

@@ -167,6 +167,7 @@ export const ALL_ROUTES: RouteConfig[] = [
   // API routes - virtual try-on
   // Merchant shops (every call is scoped to the signed-in owner in the service)
   { path: '/api/shops', isPublic: false, accessTo: { GET: [USER, ADMIN], POST: [USER, ADMIN] } },
+  { path: '/api/shops/setup-status', isPublic: false, accessTo: { GET: [USER, ADMIN] } },
   { path: '/api/shops/[id]', isPublic: false, accessTo: { GET: [USER, ADMIN], PATCH: [USER, ADMIN] } },
   { path: '/api/shops/[id]/rotate-key', isPublic: false, accessTo: { POST: [USER, ADMIN] } },
   { path: '/api/shops/[id]/usage', isPublic: false, accessTo: { GET: [USER, ADMIN] } },

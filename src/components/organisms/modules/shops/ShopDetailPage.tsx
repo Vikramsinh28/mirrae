@@ -12,6 +12,7 @@ import { InstallSnippetCard } from './InstallSnippetCard';
 import { ShopSettingsCard } from './ShopSettingsCard';
 import { ShopStatusBadge } from './ShopStatusBadge';
 import { ShopUsageCard } from './ShopUsageCard';
+import { TestTryOnCard } from './TestTryOnCard';
 
 export function ShopDetailPage({ shopId }: { shopId: string }) {
   const { data: shop, isLoading, isError } = useShop(shopId);
@@ -57,6 +58,7 @@ export function ShopDetailPage({ shopId }: { shopId: string }) {
             This shop has been suspended, so shoppers cannot use the button. Please contact support.
           </p>
         )}
+        <TestTryOnCard />
         <InstallSnippetCard shop={shop} />
         <ShopUsageCard shopId={shop.id} />
         <ShopSettingsCard key={shop.id} shop={shop} />
