@@ -94,6 +94,7 @@ export async function listShopsForAdmin(query: AdminShopsQuery) {
         dailyTryOnCap: true,
         createdAt: true,
         uninstalledAt: true,
+        verifiedAt: true,
         owner: { select: { email: true, credits: true } },
       },
     }),

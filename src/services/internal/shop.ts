@@ -11,6 +11,7 @@ import type { CreateShopInput, UpdateShopInput } from '@/validations/shop';
 export const MAX_SHOPS_PER_OWNER = 5;
 
 const PRISMA_UNIQUE_VIOLATION = 'P2002';
+const LOCAL_DEVELOPMENT_DOMAIN = 'localhost';
 const RECENT_WINDOW_DAYS = 7;
 const OTHER_FAILURE = 'OTHER';
 // A suspended or uninstalled shop is controlled by us; the merchant cannot flip its status either way.
@@ -84,11 +85,20 @@ function summariseFailures(codes: { code: string; count: number }[]): { code: st
   return other > 0 ? [...named, { code: OTHER_FAILURE, count: other }] : named;
 }
 
+/**
+ * Someone else already has this website. If they never proved they own it, the new merchant may claim it by
+ * proving ownership themselves; if they did, it is simply taken.
+ */
+async function domainConflictReason(ownerId: number, domain: string): Promise<'DOMAIN_TAKEN' | 'DOMAIN_CLAIMABLE'> {
+  const holder = await repo.findWebShopByDomain(domain);
+  return holder && holder.verifiedAt === null && holder.ownerId !== ownerId ? 'DOMAIN_CLAIMABLE' : 'DOMAIN_TAKEN';
+}
+
 export class ShopService {
   static async create(
     ownerId: number,
     input: CreateShopInput
-  ): Promise<{ ok: true; shop: ShopView } | Failure<'LIMIT_REACHED' | 'DOMAIN_TAKEN'>> {
+  ): Promise<{ ok: true; shop: ShopView } | Failure<'LIMIT_REACHED' | 'DOMAIN_TAKEN' | 'DOMAIN_CLAIMABLE'>> {
     if ((await repo.countShopsByOwner(ownerId)) >= MAX_SHOPS_PER_OWNER) return { ok: false, reason: 'LIMIT_REACHED' };
 
     // The public key is random, so a collision is astronomically unlikely, but a second try costs nothing.
@@ -102,11 +112,13 @@ export class ShopService {
           publicKey: generatePublicKey(),
           allowedOrigins: input.allowedOrigins,
           imageHosts: input.imageHosts,
+          // A website must be proven to be the merchant's before shoppers are served; a local development site has no owner to prove
+          verifiedAt: input.domain === LOCAL_DEVELOPMENT_DOMAIN ? new Date() : null,
         });
         return { ok: true, shop: toView(shop) };
       } catch (error) {
         if (uniqueViolationOn(error, 'publicKey') && attempt === 0) continue;
-        if (uniqueViolationOn(error, 'domain')) return { ok: false, reason: 'DOMAIN_TAKEN' };
+        if (uniqueViolationOn(error, 'domain')) return { ok: false, reason: await domainConflictReason(ownerId, input.domain) };
         throw error;
       }
     }

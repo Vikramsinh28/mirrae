@@ -24,7 +24,8 @@ const payloadSchema = z.object({
   exp: z.number(),
 });
 
-function getSecret(): string {
+/** The server secret, also used (with a different label) to derive website verification tokens. */
+export function getSecret(): string {
   const secret = process.env.STOREFRONT_TOKEN_SECRET;
   if (!secret || secret.length < MIN_SECRET_LENGTH) {
     throw new Error(`STOREFRONT_TOKEN_SECRET is required (at least ${MIN_SECRET_LENGTH} characters)`);

@@ -46,3 +46,27 @@ export function useRotateShopKey(id: string) {
     successMessage: 'New public key created. Update the snippet on your website.',
   });
 }
+
+export function useShopVerification(id: string, enabled: boolean) {
+  return useQuery({ queryKey: ['shopVerification', id], queryFn: () => shopsApi.verification(id), enabled: enabled && !!id });
+}
+
+export function useVerifyShop(id: string) {
+  return useApiMutation<{ verified: true }, void>({
+    mutationFn: () => shopsApi.verify(id),
+    invalidateQueries: [shopsKey, shopKey(id), ['shopVerification', id]],
+    successMessage: 'Website verified',
+  });
+}
+
+export function useClaimInstructions(domain: string, enabled: boolean) {
+  return useQuery({ queryKey: ['claimInstructions', domain], queryFn: () => shopsApi.claimInstructions(domain), enabled: enabled && !!domain });
+}
+
+export function useClaimDomain() {
+  return useApiMutation({
+    mutationFn: (params: CreateShopParams) => shopsApi.claim(params),
+    invalidateQueries: [shopsKey],
+    successMessage: 'Website claimed',
+  });
+}

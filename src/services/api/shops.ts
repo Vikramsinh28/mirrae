@@ -14,6 +14,8 @@ export interface Shop {
   status: ShopStatus;
   dailyTryOnCap: number;
   createdAt: string;
+  /** When the merchant proved they own the website; null until then. Shopify shops are always verified. */
+  verifiedAt: string | null;
 }
 
 export interface ShopListItem extends Shop {
@@ -59,7 +61,22 @@ const unwrap = <T>(response: { data?: { data?: T } }): T => {
 
 export type SetupStatus = SetupFacts;
 
+export interface VerificationRecord {
+  name: string;
+  value: string;
+}
+
 export const shopsApi = {
+  verification: async (id: string): Promise<{ verified: boolean; record: VerificationRecord }> =>
+    unwrap<{ verified: boolean; record: VerificationRecord }>(await axios.get(`/shops/${id}/verification`)),
+
+  verify: async (id: string): Promise<{ verified: true }> => unwrap<{ verified: true }>(await axios.post(`/shops/${id}/verify`)),
+
+  claimInstructions: async (domain: string): Promise<{ record: VerificationRecord }> =>
+    unwrap<{ record: VerificationRecord }>(await axios.get('/shops/claim', { params: { domain } })),
+
+  claim: async (params: CreateShopParams): Promise<Shop> => unwrap<{ shop: Shop }>(await axios.post('/shops/claim', params)).shop,
+
   setupStatus: async (): Promise<SetupStatus> => unwrap<SetupStatus>(await axios.get('/shops/setup-status')),
 
   list: async (): Promise<ShopListItem[]> => unwrap<{ shops: ShopListItem[] }>(await axios.get('/shops')).shops,

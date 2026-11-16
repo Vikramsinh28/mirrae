@@ -25,8 +25,8 @@ export const parseShopId = (value: string): string | null => {
   return parsed.success ? parsed.data : null;
 };
 
-export const conflictResponse = (message: string) =>
-  NextResponse.json({ success: false, message }, { status: 409 });
+export const conflictResponse = (message: string, code?: string) =>
+  NextResponse.json({ success: false, message, ...(code ? { code } : {}) }, { status: 409 });
 
 export const forbiddenMessage = (message: string) =>
   NextResponse.json({ success: false, message }, { status: 403 });

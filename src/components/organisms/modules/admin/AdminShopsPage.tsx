@@ -39,7 +39,12 @@ function ShopRow({ shop, onChange, busy }: { shop: AdminShop; onChange: (id: str
         <div className="text-text-muted text-[11px]">{shop.domain}</div>
       </TableCell>
       <TableCell><Badge variant="default">{shop.platform === 'SHOPIFY' ? 'Shopify' : 'Website'}</Badge></TableCell>
-      <TableCell><ShopStatusBadge status={shop.status} /></TableCell>
+      <TableCell>
+        <div className="flex flex-wrap gap-1">
+          <ShopStatusBadge status={shop.status} />
+          {shop.platform === 'WEB' && shop.verifiedAt === null && <Badge variant="warning">Not verified</Badge>}
+        </div>
+      </TableCell>
       <TableCell className="text-text-muted">{ownerLabel(shop)}</TableCell>
       <TableCell className="text-right">{shop.owner.credits.toFixed(1)}</TableCell>
       <TableCell className="text-right">{shop.tryOnsLast7Days}</TableCell>

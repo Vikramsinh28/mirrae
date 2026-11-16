@@ -51,7 +51,26 @@ describe('ShopService', () => {
         publicKey: 'pk_live_new',
         allowedOrigins: input.allowedOrigins,
         imageHosts: [],
+        verifiedAt: null,
       });
+    });
+
+    test('a new website starts unverified: shoppers are not served until the merchant proves they own it', async () => {
+      r.countShopsByOwner.mockResolvedValue(0);
+      r.createShop.mockResolvedValue(shop as never);
+
+      await ShopService.create(OWNER, input);
+
+      expect(r.createShop).toHaveBeenCalledWith(expect.objectContaining({ verifiedAt: null }));
+    });
+
+    test('a local development site has nobody to prove ownership to, so it starts verified', async () => {
+      r.countShopsByOwner.mockResolvedValue(0);
+      r.createShop.mockResolvedValue(shop as never);
+
+      await ShopService.create(OWNER, { ...input, domain: 'localhost', allowedOrigins: ['http://localhost:3000'] });
+
+      expect(r.createShop).toHaveBeenCalledWith(expect.objectContaining({ verifiedAt: expect.any(Date) }));
     });
 
     test(`refuses a sixth shop (limit ${MAX_SHOPS_PER_OWNER}) so one account cannot hoard domains`, async () => {
@@ -59,6 +78,30 @@ describe('ShopService', () => {
 
       await expect(ShopService.create(OWNER, input)).resolves.toEqual({ ok: false, reason: 'LIMIT_REACHED' });
       expect(r.createShop).not.toHaveBeenCalled();
+    });
+
+    test('says the domain is claimable when the shop that has it never proved it owns it', async () => {
+      r.countShopsByOwner.mockResolvedValue(0);
+      r.createShop.mockRejectedValue(Object.assign(new Error('Unique constraint'), { code: 'P2002', meta: { target: ['platform', 'domain'] } }));
+      r.findWebShopByDomain.mockResolvedValue({ ownerId: 99, verifiedAt: null } as never);
+
+      await expect(ShopService.create(OWNER, input)).resolves.toEqual({ ok: false, reason: 'DOMAIN_CLAIMABLE' });
+    });
+
+    test('says the domain is taken when the shop that has it is verified', async () => {
+      r.countShopsByOwner.mockResolvedValue(0);
+      r.createShop.mockRejectedValue(Object.assign(new Error('Unique constraint'), { code: 'P2002', meta: { target: ['platform', 'domain'] } }));
+      r.findWebShopByDomain.mockResolvedValue({ ownerId: 99, verifiedAt: new Date() } as never);
+
+      await expect(ShopService.create(OWNER, input)).resolves.toEqual({ ok: false, reason: 'DOMAIN_TAKEN' });
+    });
+
+    test('says the domain is taken (not claimable) when it is your own unverified shop: verify that one instead', async () => {
+      r.countShopsByOwner.mockResolvedValue(0);
+      r.createShop.mockRejectedValue(Object.assign(new Error('Unique constraint'), { code: 'P2002', meta: { target: ['platform', 'domain'] } }));
+      r.findWebShopByDomain.mockResolvedValue({ ownerId: OWNER, verifiedAt: null } as never);
+
+      await expect(ShopService.create(OWNER, input)).resolves.toEqual({ ok: false, reason: 'DOMAIN_TAKEN' });
     });
 
     test('says the domain is taken when another shop already has it', async () => {

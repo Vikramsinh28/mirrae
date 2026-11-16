@@ -61,7 +61,7 @@ function toOrigin(value: string): string | null {
 
 const unique = <T>(items: readonly T[]): T[] => Array.from(new Set(items));
 
-const domainSchema = z
+export const domainSchema = z
   .string()
   .max(2048)
   .transform((value, context) => {

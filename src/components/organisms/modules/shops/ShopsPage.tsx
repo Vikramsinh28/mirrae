@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { PageHeaderWithAction } from '@/components/molecules/common/PageHeaderWithAction';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { useShops } from '@/hooks/useShops';
 import type { ShopListItem } from '@/services/api/shops';
 
@@ -29,7 +30,10 @@ function ShopCard({ shop }: { shop: ShopListItem }) {
               <CardTitle className="truncate text-sm">{shop.name}</CardTitle>
               <CardDescription className="truncate">{shop.domain}</CardDescription>
             </div>
-            <ShopStatusBadge status={shop.status} />
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              <ShopStatusBadge status={shop.status} />
+              {shop.platform === 'WEB' && shop.verifiedAt === null && <Badge variant="warning">Not verified</Badge>}
+            </div>
           </div>
         </CardHeader>
         <CardContent>

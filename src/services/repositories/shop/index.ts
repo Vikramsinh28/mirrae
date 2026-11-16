@@ -17,6 +17,8 @@ export interface NewShop {
   publicKey: string;
   allowedOrigins: string[];
   imageHosts: string[];
+  /** Set when the website is already proven to be the merchant's (a local development site, or a claim that was verified). */
+  verifiedAt?: Date | null;
 }
 
 export type ShopChanges = Partial<
@@ -93,4 +95,22 @@ export async function getSetupFacts(ownerId: number): Promise<SetupFacts> {
     prisma.storefrontEvent.findFirst({ where: { shop: { ownerId } }, select: { id: true } }),
   ]);
   return { testedTryOn: ownJob !== null, installed: shopperJob !== null || event !== null, shopperTryOn: shopperJob !== null };
+}
+
+export const findWebShopByDomain = (domain: string) =>
+  prisma.shop.findUnique({ where: { platform_domain: { platform: 'WEB', domain } } });
+
+export const markShopVerified = (id: string) => prisma.shop.update({ where: { id }, data: { verifiedAt: new Date() } });
+
+/**
+ * A merchant who proved they own a website takes it over from an account that registered it without proving
+ * anything. The old, unverified shop is removed and the new, verified one created in one transaction; if the
+ * holder was verified in the meantime nothing changes and this returns null.
+ */
+export function claimDomainFromUnverifiedShop(holderId: string, shop: NewShop) {
+  return prisma.$transaction(async tx => {
+    const removed = await tx.shop.deleteMany({ where: { id: holderId, platform: 'WEB', verifiedAt: null } });
+    if (removed.count === 0) return null;
+    return tx.shop.create({ data: { ...shop, verifiedAt: new Date() } });
+  });
 }

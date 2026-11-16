@@ -32,6 +32,9 @@ type Rejected<Reason extends string> = { ok: false; reason: Reason; retryAfterMs
 
 type Authorized = { ok: true; shop: Shop; session: StorefrontSession } | Rejected<StorefrontFailure>;
 
+/** A shop serves shoppers only while it is live, and a website shop only once the merchant proved they own the website. */
+const isServable = (shop: Shop) => shop.status === 'ACTIVE' && (shop.platform !== 'WEB' || shop.verifiedAt !== null);
+
 const originAllowed = (shop: Shop, origin: string) => origin !== '' && shop.allowedOrigins.includes(origin);
 
 function rateLimited(...checks: ReturnType<typeof storefrontLimits.sessionByIp.check>[]): Rejected<'RATE_LIMITED'> | null {
@@ -45,7 +48,7 @@ async function authorize(token: string, origin: string): Promise<Authorized> {
 
   const shop = await shopRepo.findShopById(session.shopId);
   if (!shop) return { ok: false, reason: 'INVALID_TOKEN' };
-  if (shop.status !== 'ACTIVE') return { ok: false, reason: 'SHOP_INACTIVE' };
+  if (!isServable(shop)) return { ok: false, reason: 'SHOP_INACTIVE' };
   if (!originAllowed(shop, origin)) return { ok: false, reason: 'ORIGIN_NOT_ALLOWED' };
 
   return { ok: true, shop, session };
@@ -60,7 +63,7 @@ export class StorefrontService {
 
     const shop = await shopRepo.findShopByPublicKey(input.publicKey);
     if (!shop) return { ok: false, reason: 'UNKNOWN_SHOP' };
-    if (shop.status !== 'ACTIVE') return { ok: false, reason: 'SHOP_INACTIVE' };
+    if (!isServable(shop)) return { ok: false, reason: 'SHOP_INACTIVE' };
     if (!originAllowed(shop, input.origin)) return { ok: false, reason: 'ORIGIN_NOT_ALLOWED' };
 
     const token = signStorefrontToken({ shopId: shop.id, sessionId: randomUUID() });

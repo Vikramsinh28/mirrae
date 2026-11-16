@@ -106,9 +106,29 @@ describe('StorefrontService', () => {
       ['an unknown public key', () => shops.findShopByPublicKey.mockResolvedValue(null), 'UNKNOWN_SHOP'],
       ['a suspended shop', () => shops.findShopByPublicKey.mockResolvedValue({ ...shop, status: 'SUSPENDED' } as never), 'SHOP_INACTIVE'],
       ['an uninstalled shop', () => shops.findShopByPublicKey.mockResolvedValue({ ...shop, status: 'UNINSTALLED' } as never), 'SHOP_INACTIVE'],
+      [
+        'a website shop whose owner has not proved they own the website',
+        () => shops.findShopByPublicKey.mockResolvedValue({ ...shop, platform: 'WEB', verifiedAt: null } as never),
+        'SHOP_INACTIVE',
+      ],
     ])('refuses %s', async (_name, arrange, reason) => {
       arrange();
       await expect(StorefrontService.openSession({ publicKey: 'pk', origin: ORIGIN, ip: IP })).resolves.toMatchObject({ ok: false, reason });
+    });
+
+    test('serves a website shop once its owner has proved the website, and a Shopify shop (verified by Shopify) without a proof of its own', async () => {
+      shops.findShopByPublicKey.mockResolvedValue({ ...shop, platform: 'WEB', verifiedAt: new Date() } as never);
+      await expect(StorefrontService.openSession({ publicKey: 'pk', origin: ORIGIN, ip: IP })).resolves.toMatchObject({ ok: true });
+
+      shops.findShopByPublicKey.mockResolvedValue({ ...shop, platform: 'SHOPIFY', verifiedAt: null } as never);
+      await expect(StorefrontService.openSession({ publicKey: 'pk', origin: ORIGIN, ip: IP })).resolves.toMatchObject({ ok: true });
+    });
+
+    test('stops serving a session whose website shop is no longer verified (for example after an admin reset)', async () => {
+      const { token } = await open();
+      shops.findShopById.mockResolvedValue({ ...shop, platform: 'WEB', verifiedAt: null } as never);
+
+      await expect(StorefrontService.getStatus({ token, origin: ORIGIN, jobId: 'job-1' })).resolves.toMatchObject({ ok: false, reason: 'SHOP_INACTIVE' });
     });
 
     test.each(['https://evil.example.org', 'http://www.example.com', 'https://www.example.com.evil.net', ''])(

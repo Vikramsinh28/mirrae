@@ -37,6 +37,12 @@ export async function POST(request: NextRequest) {
     const result = await ShopService.create(merchant.userId, parsed.data);
     if (result.ok) return successResponse({ shop: result.shop }, 201);
 
+    if (result.reason === 'DOMAIN_CLAIMABLE') {
+      return conflictResponse(
+        'Another account added this website but has not proved it owns it. If it is yours, you can claim it by proving ownership.',
+        'DOMAIN_CLAIMABLE'
+      );
+    }
     return conflictResponse(
       result.reason === 'LIMIT_REACHED'
         ? `You can have up to ${MAX_SHOPS_PER_OWNER} shops.`

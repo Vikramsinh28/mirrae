@@ -14,6 +14,7 @@ import { ShopSettingsCard } from './ShopSettingsCard';
 import { ShopStatusBadge } from './ShopStatusBadge';
 import { ShopUsageCard } from './ShopUsageCard';
 import { TestTryOnCard } from './TestTryOnCard';
+import { VerifyDomainCard } from './VerifyDomainCard';
 
 export function ShopDetailPage({ shopId }: { shopId: string }) {
   const { data: shop, isLoading, isError } = useShop(shopId);
@@ -60,6 +61,7 @@ export function ShopDetailPage({ shopId }: { shopId: string }) {
           </p>
         )}
         <LowCreditBanner />
+        {shop.platform === 'WEB' && shop.verifiedAt === null && <VerifyDomainCard shop={shop} />}
         <TestTryOnCard />
         <InstallSnippetCard shop={shop} />
         <ShopUsageCard shopId={shop.id} />

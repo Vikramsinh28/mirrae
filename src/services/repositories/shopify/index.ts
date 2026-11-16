@@ -46,6 +46,8 @@ export const createShopifyShopWithOwner = (data: NewShopifyShop) =>
         publicKey: data.publicKey,
         allowedOrigins: data.allowedOrigins,
         imageHosts: data.imageHosts,
+        // Shopify has already verified the store, so there is nothing for the merchant to prove
+        verifiedAt: new Date(),
       },
     });
   });

@@ -30,6 +30,7 @@ export interface AdminShop {
   dailyTryOnCap: number;
   createdAt: string;
   uninstalledAt: string | null;
+  verifiedAt: string | null;
   owner: { email: string; credits: number };
   tryOnsLast7Days: number;
 }
