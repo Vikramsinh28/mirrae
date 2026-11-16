@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 
 import { siteConfig } from '@/app/siteConfig';
 import { NAVIGATION_ITEMS } from '@/lib/constants/sidebar-navigation';
@@ -15,11 +15,10 @@ import { MirraeMark } from '@/components/mirrae/mirrae-mark';
 import GradientCtaButton from '@/components/molecules/common/GradientCtaButton';
 import { Card, CardContent as UICardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Sidebar as ShadcnSidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem, useSidebar } from '@/components/ui/sidebar';
 import { useUiModalsStore } from '@/store/ui/modals';
 import { RiVipCrownLine } from '@remixicon/react';
-import { ChevronRightIcon, ChevronsUpDownIcon } from 'lucide-react';
+import { ChevronRightIcon } from 'lucide-react';
 import { UserProfileDropdown } from './UserProfileDropdown';
 
 export function Sidebar() {
@@ -43,62 +42,19 @@ export function Sidebar() {
     return pathname === itemUrl || pathname.startsWith(itemUrl);
   };
 
-  const teams = [
-    {
-      name: "Acme Inc",
-      plan: "Enterprise",
-    },
-    {
-      name: "Acme Corp.",
-      plan: "Startup",
-    },
-    {
-      name: "Evil Corp.",
-      plan: "Free",
-    },
-  ];
-
-  const [activeTeam, setActiveTeam] = useState(teams[0]);
-
   return (
     <ShadcnSidebar variant="inset" collapsible="icon">
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton
-                  size="lg"
-                  className="data-open:bg-sidebar-accent data-open:text-sidebar-accent-foreground data-[size='lg']:group-data-[collapsible=icon]:p-0!"
-                >
-                  <span className="flex size-8 shrink-0 items-center justify-center">
-                    <MirraeMark withWordmark={false} />
-                  </span>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">
-                      {activeTeam.name}
-                    </span>
-                    <span className="truncate text-xs">
-                      {activeTeam.plan}
-                    </span>
-                  </div>
-                  <ChevronsUpDownIcon />
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>Teams</DropdownMenuLabel>
-                  {teams.map((team) => (
-                    <DropdownMenuItem
-                      key={team.name}
-                      onClick={() => setActiveTeam(team)}
-                    >
-                      {team.name}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <SidebarMenuButton asChild size="lg" className="data-[size='lg']:group-data-[collapsible=icon]:p-0!">
+              <Link href={siteConfig.baseLinks.home}>
+                <span className="flex size-8 shrink-0 items-center justify-center">
+                  <MirraeMark withWordmark={false} />
+                </span>
+                <span className="truncate text-base font-medium">Mirrae</span>
+              </Link>
+            </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
@@ -187,7 +143,7 @@ export function Sidebar() {
                 <RiVipCrownLine className="size-3.5" /> Pro User
               </span>
             ) : (
-              <GradientCtaButton label="Upgrade to Pro" onClick={handleOpenPurchase} size="sm" />
+              <GradientCtaButton label="Buy credits" onClick={handleOpenPurchase} size="sm" />
             )}
           </UICardContent>
         </Card>
