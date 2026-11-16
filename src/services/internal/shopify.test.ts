@@ -1,5 +1,7 @@
 import { fetchShopProfile, ShopifyApiError } from '@/services/external/shopify/admin';
 import * as repo from '@/services/repositories/shopify';
+import { CreditService } from './credit';
+import { ShopService } from './shop';
 import { ShopifyService } from './shopify';
 
 jest.mock('@/services/external/shopify/admin', () => ({
@@ -7,6 +9,8 @@ jest.mock('@/services/external/shopify/admin', () => ({
   ShopifyApiError: class extends Error {},
 }));
 jest.mock('@/services/repositories/shopify');
+jest.mock('./credit', () => ({ CreditService: { getUserCredits: jest.fn() } }));
+jest.mock('./shop', () => ({ ...jest.requireActual('./shop'), ShopService: { usage: jest.fn(), update: jest.fn() } }));
 jest.mock('@/lib/storefront/public-key', () => ({ generatePublicKey: () => 'pk_live_new' }));
 
 const r = repo as jest.Mocked<typeof repo>;
@@ -114,5 +118,70 @@ describe('ShopifyService uninstall and erase', () => {
   test('erase removes the shop', async () => {
     await ShopifyService.erase(SHOP);
     expect(r.eraseShopifyShop).toHaveBeenCalledWith(SHOP);
+  });
+});
+
+describe('ShopifyService.overview', () => {
+  const usage = { days: 30, conversion: { opened: 1 } };
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+    r.findShopifyShop.mockResolvedValue(row as never);
+    (CreditService.getUserCredits as jest.Mock).mockResolvedValue(12.5);
+    (ShopService.usage as jest.Mock).mockResolvedValue({ ok: true, usage });
+  });
+
+  test("returns the shop, the owner's credits and the usage for the window", async () => {
+    const result = await ShopifyService.overview({ ...input, days: 30 });
+
+    expect(result).toEqual({
+      ok: true,
+      overview: { shop: { id: 'shop-1', publicKey: 'pk_live_old', domain: SHOP, name: 'My Store', status: 'ACTIVE' }, credits: 12.5, usage },
+    });
+    expect(CreditService.getUserCredits).toHaveBeenCalledWith(9);
+    expect(ShopService.usage).toHaveBeenCalledWith(9, 'shop-1', 30);
+  });
+
+  test('never exposes the owner account id', async () => {
+    const result = await ShopifyService.overview({ ...input, days: 30 });
+
+    expect(JSON.stringify(result)).not.toContain('ownerId');
+  });
+
+  test('passes on a Shopify failure when the shop is not set up yet', async () => {
+    r.findShopifyShop.mockResolvedValue(null);
+    profileMock.mockRejectedValue(new ShopifyApiError('refused'));
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(ShopifyService.overview({ ...input, days: 30 })).resolves.toEqual({ ok: false, reason: 'SHOPIFY_ERROR' });
+  });
+});
+
+describe('ShopifyService.setLive', () => {
+  beforeEach(() => {
+    jest.resetAllMocks();
+    r.findShopifyShop.mockResolvedValue(row as never);
+  });
+
+  test("switches the shop through the owner's own rules", async () => {
+    (ShopService.update as jest.Mock).mockResolvedValue({ ok: true, shop: { ...row, status: 'PAUSED' } });
+
+    const result = await ShopifyService.setLive(SHOP, 'PAUSED');
+
+    expect(result).toMatchObject({ ok: true, shop: { id: 'shop-1', status: 'PAUSED' } });
+    expect(ShopService.update).toHaveBeenCalledWith(9, 'shop-1', { status: 'PAUSED' });
+  });
+
+  test('says NOT_FOUND for a shop that is not installed', async () => {
+    r.findShopifyShop.mockResolvedValue(null);
+
+    await expect(ShopifyService.setLive(SHOP, 'ACTIVE')).resolves.toEqual({ ok: false, reason: 'NOT_FOUND' });
+    expect(ShopService.update).not.toHaveBeenCalled();
+  });
+
+  test('passes on LOCKED for a suspended or uninstalled shop', async () => {
+    (ShopService.update as jest.Mock).mockResolvedValue({ ok: false, reason: 'LOCKED' });
+
+    await expect(ShopifyService.setLive(SHOP, 'ACTIVE')).resolves.toEqual({ ok: false, reason: 'LOCKED' });
   });
 });

@@ -8,7 +8,7 @@ import { NextRequest } from 'next/server';
 import { ShopifyService } from '@/services/internal/shopify';
 
 jest.mock('@/services/internal/shopify', () => ({
-  ShopifyService: { ensureInstalled: jest.fn(), markUninstalled: jest.fn(), erase: jest.fn() },
+  ShopifyService: { ensureInstalled: jest.fn(), overview: jest.fn(), setLive: jest.fn(), markUninstalled: jest.fn(), erase: jest.fn() },
 }));
 
 const service = ShopifyService as jest.Mocked<typeof ShopifyService>;
@@ -104,6 +104,84 @@ describe('Shopify routes', () => {
     test('refuses a token that is not signed by Shopify for this app', async () => {
       expect((await post('Bearer a.b.c')).status).toBe(401);
       expect(service.ensureInstalled).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('GET and PATCH /api/shopify/shop', () => {
+    const NOW = Math.floor(Date.now() / 1000);
+    const b64 = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
+    const bearer = (secret = SECRET) => {
+      const unsigned = `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({
+        iss: `https://${SHOP}/admin`,
+        dest: `https://${SHOP}`,
+        aud: 'the-id',
+        sub: '1',
+        exp: NOW + 60,
+        nbf: NOW - 5,
+      })}`;
+      return `Bearer ${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
+    };
+    const route = () => import('@/app/api/shopify/shop/route');
+    const get = async (query = '', authorization: string | null = bearer()) =>
+      (await route()).GET(new NextRequest(`http://localhost/api/shopify/shop${query}`, { headers: authorization ? { authorization } : {} }));
+    const patch = async (body: unknown, authorization: string | null = bearer()) =>
+      (await route()).PATCH(
+        new NextRequest('http://localhost/api/shopify/shop', {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json', ...(authorization ? { authorization } : {}) },
+          body: JSON.stringify(body),
+        })
+      );
+
+    test('needs a valid session token', async () => {
+      expect((await get('', null)).status).toBe(401);
+      expect((await get('', bearer('attacker'))).status).toBe(401);
+      expect(service.overview).not.toHaveBeenCalled();
+    });
+
+    test('answers for the shop in the token, never one named in the request', async () => {
+      service.overview.mockResolvedValue({ ok: true, overview: { shop: { id: 's' }, credits: 5, usage: {} } as never });
+
+      const response = await get('?days=7&shop=other.myshopify.com');
+
+      expect(response.status).toBe(200);
+      expect(service.overview).toHaveBeenCalledWith(expect.objectContaining({ shop: SHOP, days: 7 }));
+    });
+
+    test('rejects a bad days value', async () => {
+      expect((await get('?days=abc')).status).toBe(400);
+    });
+
+    test('reports a Shopify failure as a gateway error', async () => {
+      service.overview.mockResolvedValue({ ok: false, reason: 'SHOPIFY_ERROR' });
+
+      expect((await get()).status).toBe(502);
+    });
+
+    test('switches the shop on or off', async () => {
+      service.setLive.mockResolvedValue({ ok: true, shop: { id: 's', status: 'PAUSED' } as never });
+
+      const response = await patch({ status: 'PAUSED' });
+
+      expect(response.status).toBe(200);
+      expect(service.setLive).toHaveBeenCalledWith(SHOP, 'PAUSED');
+    });
+
+    test.each([{ status: 'SUSPENDED' }, { status: 'UNINSTALLED' }, {}, null])('refuses to let the merchant set %p', async body => {
+      expect((await patch(body)).status).toBe(400);
+      expect(service.setLive).not.toHaveBeenCalled();
+    });
+
+    test('maps a locked shop to 403 and an unknown one to 404', async () => {
+      service.setLive.mockResolvedValueOnce({ ok: false, reason: 'LOCKED' }).mockResolvedValueOnce({ ok: false, reason: 'NOT_FOUND' });
+
+      expect((await patch({ status: 'ACTIVE' })).status).toBe(403);
+      expect((await patch({ status: 'ACTIVE' })).status).toBe(404);
+    });
+
+    test('needs a valid session token to switch', async () => {
+      expect((await patch({ status: 'PAUSED' }, null)).status).toBe(401);
+      expect(service.setLive).not.toHaveBeenCalled();
     });
   });
 });

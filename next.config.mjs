@@ -38,6 +38,13 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // The embedded Shopify admin page runs in an iframe inside the Shopify admin: allow Shopify, and only Shopify, to frame it
+        source: '/shopify',
+        headers: [
+          { key: 'Content-Security-Policy', value: 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;' },
+        ],
+      },
+      {
         // Apply cache headers to static pages
         source: '/(privacy|terms)',
         headers: [

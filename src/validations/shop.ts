@@ -115,14 +115,18 @@ export const createShopSchema = z
     imageHosts: [] as string[],
   }));
 
+// Merchants can pause and resume; SUSPENDED and UNINSTALLED are set by us, never by them.
+const merchantStatusSchema = z.enum(['ACTIVE', 'PAUSED']);
+
+export const shopSwitchSchema = z.object({ status: merchantStatusSchema });
+
 export const updateShopSchema = z
   .object({
     name: nameSchema,
     allowedOrigins: z.array(originSchema).min(1).max(MAX_LIST_ITEMS).transform(unique),
     imageHosts: z.array(imageHostSchema).max(MAX_LIST_ITEMS).transform(unique),
     dailyTryOnCap: z.number().int().min(1).max(MAX_DAILY_CAP),
-    // Merchants can pause and resume; SUSPENDED and UNINSTALLED are set by us, never by them.
-    status: z.enum(['ACTIVE', 'PAUSED']),
+    status: merchantStatusSchema,
   })
   .partial()
   .refine(update => Object.keys(update).length > 0, { message: 'Nothing to update' });
