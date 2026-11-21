@@ -41,11 +41,13 @@ export function useShopifyAdmin(apiKey: string, days: number) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['shopifyOverview'] }),
   });
 
-  // Settle any purchase approved since the last visit, once per page load, then refresh the balance.
+  // Settle any purchase approved since the last visit, once per page load, then refresh the balance. It waits for
+  // the overview: on a first visit the overview call is what creates the shop, and the sync answers 404 before that.
   const [creditedNow, setCreditedNow] = useState(0);
   const synced = useRef(false);
+  const shopLoaded = overview.isSuccess;
   useEffect(() => {
-    if (!getToken || synced.current) return;
+    if (!getToken || !shopLoaded || synced.current) return;
     synced.current = true;
     void shopifyAdminApi
       .syncPurchases(getToken)
@@ -57,7 +59,7 @@ export function useShopifyAdmin(apiKey: string, days: number) {
       })
       // The sync is a courtesy on page load: the shop still works and the next visit tries again.
       .catch(() => undefined);
-  }, [getToken, queryClient]);
+  }, [getToken, shopLoaded, queryClient]);
 
   // Opens Shopify's approval page in the top window (it cannot load inside this frame).
   const buy = useMutation({
