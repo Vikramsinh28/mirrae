@@ -255,15 +255,15 @@ describe('ShopifyService.syncStorefrontConfig', () => {
     expect(metafieldsMock).toHaveBeenCalledTimes(2);
   });
 
-  test('retries a failure after a few minutes, not on every page load, and never throws for a Shopify failure', async () => {
+  test('retries a failure after 20 seconds, not on every page load, and never throws for a Shopify failure', async () => {
     const shop = `fail-${counter}.myshopify.com`;
     const t0 = 1_800_000_000_000;
     metafieldsMock.mockRejectedValueOnce(new ShopifyApiError('refused'));
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
 
     expect(await sync({ shop, now: t0 })).toBe('FAILED');
-    expect(await sync({ shop, now: t0 + 60 * 1000 })).toBe('SKIPPED');
-    expect(await sync({ shop, now: t0 + 6 * 60 * 1000 })).toBe('SYNCED');
+    expect(await sync({ shop, now: t0 + 5 * 1000 })).toBe('SKIPPED');
+    expect(await sync({ shop, now: t0 + 30 * 1000 })).toBe('SYNCED');
   });
 
   test('does nothing when the app address is not https (a store page could not load the script)', async () => {
