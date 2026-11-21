@@ -1,0 +1,57 @@
+{%- comment -%}
+  Mirrae try-on (app embed). Turned on by the merchant in the theme editor (App embeds), with nothing to paste:
+  the app stores the shop's public key and the widget address on the app installation when the merchant opens it.
+  The two "advanced" settings are only a fallback for when those stored values are not there yet.
+{%- endcomment -%}
+{%- liquid
+  assign shop_key = app.metafields.mirrae.public_key.value
+  if shop_key == blank
+    assign shop_key = block.settings.shop_key
+  endif
+
+  assign widget_url = app.metafields.mirrae.widget_url.value
+  if widget_url == blank and block.settings.app_address != blank
+    assign widget_url = block.settings.app_address | strip | append: '/widget.js'
+  endif
+-%}
+{%- if shop_key != blank and widget_url != blank -%}
+  <script
+    src="{{ widget_url }}"
+    data-shop-key="{{ shop_key | strip | escape }}"
+    data-views="{{ block.settings.views }}"
+    data-color="{{ block.settings.color }}"
+    {%- if block.settings.label != blank %} data-label="{{ block.settings.label | escape }}"{% endif -%}
+    {%- if block.settings.target != blank %} data-target="{{ block.settings.target | escape }}"{% endif %}
+    async
+  ></script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Mirrae try-on",
+  "target": "body",
+  "settings": [
+    {
+      "type": "select",
+      "id": "views",
+      "label": "What shoppers get",
+      "options": [
+        { "value": "multi", "label": "Front, side and back (2 credits)" },
+        { "value": "single", "label": "Front view only (1 credit)" }
+      ],
+      "default": "multi"
+    },
+    { "type": "color", "id": "color", "label": "Button color", "default": "#111111" },
+    { "type": "text", "id": "label", "label": "Button text", "info": "Leave empty for the default, in the shopper's language." },
+    {
+      "type": "text",
+      "id": "target",
+      "label": "Place the button inside",
+      "info": "A CSS selector such as .product-form. Leave empty for a floating button in the corner."
+    },
+    { "type": "header", "content": "Advanced (only if the button does not show up)" },
+    { "type": "text", "id": "shop_key", "label": "Shop key", "info": "Starts with pk_. Shown in the Mirrae app." },
+    { "type": "text", "id": "app_address", "label": "Mirrae address", "info": "For example https://app.example.com, without a trailing slash." }
+  ]
+}
+{% endschema %}

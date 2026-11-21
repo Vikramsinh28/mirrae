@@ -3,7 +3,7 @@
  * HTTP layer: signature and token checks, topics, and that nothing runs before verification.
  */
 import { createHmac } from 'node:crypto';
-import { NextRequest } from 'next/server';
+import { NextRequest, after } from 'next/server';
 
 import { ShopifyService } from '@/services/internal/shopify';
 import { ShopifyBillingService } from '@/services/internal/shopify-billing';
@@ -11,8 +11,9 @@ import { ShopifyBillingService } from '@/services/internal/shopify-billing';
 jest.mock('@/services/internal/shopify-billing', () => ({
   ShopifyBillingService: { startPurchase: jest.fn(), syncPurchases: jest.fn(), applyWebhook: jest.fn() },
 }));
+jest.mock('next/server', () => ({ ...jest.requireActual('next/server'), after: jest.fn() }));
 jest.mock('@/services/internal/shopify', () => ({
-  ShopifyService: { ensureInstalled: jest.fn(), overview: jest.fn(), setLive: jest.fn(), markUninstalled: jest.fn(), erase: jest.fn() },
+  ShopifyService: { ensureInstalled: jest.fn(), overview: jest.fn(), setLive: jest.fn(), markUninstalled: jest.fn(), erase: jest.fn(), syncStorefrontConfig: jest.fn() },
 }));
 
 const service = ShopifyService as jest.Mocked<typeof ShopifyService>;
@@ -160,6 +161,16 @@ describe('Shopify routes', () => {
 
       expect(response.status).toBe(200);
       expect(service.overview).toHaveBeenCalledWith(expect.objectContaining({ shop: SHOP, days: 7 }));
+    });
+
+    test("schedules the extension's shop key to be stored after the response, with the shop's own key", async () => {
+      service.overview.mockResolvedValue({ ok: true, overview: { shop: { id: 's', publicKey: 'pk_live_mine' }, credits: 5, usage: {} } as never });
+
+      await get();
+
+      const scheduled = (after as jest.Mock).mock.calls.at(-1)?.[0] as () => Promise<unknown>;
+      await scheduled();
+      expect(service.syncStorefrontConfig).toHaveBeenCalledWith(expect.objectContaining({ shop: SHOP, publicKey: 'pk_live_mine' }));
     });
 
     test('rejects a bad days value', async () => {

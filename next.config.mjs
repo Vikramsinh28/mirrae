@@ -2,6 +2,8 @@ import { withSentryConfig } from '@sentry/nextjs';
 /** @type {import('next').NextConfig} */
 
 const nextConfig = {
+  // Development only: lets a tunnel (Cloudflare, ngrok, or hosts named in ALLOWED_DEV_ORIGINS, comma separated) load the dev server
+  allowedDevOrigins: ['*.trycloudflare.com', '*.ngrok-free.app', ...(process.env.ALLOWED_DEV_ORIGINS?.split(',').map(host => host.trim()).filter(Boolean) ?? [])],
   devIndicators: { position: 'bottom-right' },
   transpilePackages: ['@prisma/adapter-pg', '@prisma/client', 'prisma'],
 

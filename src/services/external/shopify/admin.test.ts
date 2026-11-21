@@ -1,4 +1,4 @@
-import { createOneTimePurchase, fetchShopProfile, listOneTimePurchases, ShopifyApiError } from './admin';
+import { createOneTimePurchase, fetchShopProfile, listOneTimePurchases, setAppMetafields, ShopifyApiError } from './admin';
 
 const CONFIG = { clientId: 'client-id', clientSecret: 'client-secret' };
 const SHOP = 'my-store.myshopify.com';
@@ -124,5 +124,46 @@ describe('one-time purchases', () => {
     const fetchImpl = jest.fn().mockResolvedValueOnce(exchange()).mockResolvedValueOnce(json(200, { data: { somethingElse: true } }));
 
     await expect(listOneTimePurchases(call(fetchImpl))).rejects.toThrow(ShopifyApiError);
+  });
+});
+
+describe('setAppMetafields', () => {
+  const exchange = () => json(200, { access_token: 'shpat_online' });
+  const fields = [
+    { namespace: 'mirrae', key: 'public_key', type: 'single_line_text_field', value: 'pk_live_abc' },
+    { namespace: 'mirrae', key: 'widget_url', type: 'single_line_text_field', value: 'https://app.mirrae.test/widget.js' },
+  ] as const;
+  const call = (fetchImpl: jest.Mock) => ({ shop: SHOP, sessionToken: 'session.jwt', config: CONFIG, fetchImpl: fetchImpl as unknown as typeof fetch, metafields: fields });
+
+  test('sets the values on the app installation, exchanging the session token only once', async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(exchange())
+      .mockResolvedValueOnce(json(200, { data: { currentAppInstallation: { id: 'gid://shopify/AppInstallation/9' } } }))
+      .mockResolvedValueOnce(json(200, { data: { metafieldsSet: { metafields: [{ key: 'public_key' }], userErrors: [] } } }));
+
+    await setAppMetafields(call(fetchImpl));
+
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(fetchImpl.mock.calls.filter(([url]) => String(url).endsWith('/oauth/access_token'))).toHaveLength(1);
+    const sent = JSON.parse(fetchImpl.mock.calls[2][1].body);
+    expect(sent.variables.metafields).toEqual(fields.map(field => ({ ...field, ownerId: 'gid://shopify/AppInstallation/9' })));
+  });
+
+  test('fails when Shopify reports user errors', async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(exchange())
+      .mockResolvedValueOnce(json(200, { data: { currentAppInstallation: { id: 'gid://x' } } }))
+      .mockResolvedValueOnce(json(200, { data: { metafieldsSet: { metafields: [], userErrors: [{ message: 'nope' }] } } }));
+
+    await expect(setAppMetafields(call(fetchImpl))).rejects.toThrow(ShopifyApiError);
+  });
+
+  test('fails when there is no app installation to own the values', async () => {
+    const fetchImpl = jest.fn().mockResolvedValueOnce(exchange()).mockResolvedValueOnce(json(200, { data: {} }));
+
+    await expect(setAppMetafields(call(fetchImpl))).rejects.toThrow(ShopifyApiError);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 });

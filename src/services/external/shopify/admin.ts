@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { ShopifyConfig } from '@/lib/shopify/config';
+import type { StorefrontMetafield } from '@/lib/shopify/storefront-config';
 
 /**
  * Talks to a shop's Shopify Admin API. The embedded app's session token is swapped for a short-lived ONLINE
@@ -80,6 +81,8 @@ interface AdminCall {
   sessionToken: string;
   config: ShopifyConfig;
   fetchImpl?: typeof fetch;
+  /** An online token already obtained for this session, so several calls need only one token exchange. */
+  accessToken?: string;
 }
 
 /** Swaps the embedded app's session token for a short-lived online access token. */
@@ -107,7 +110,7 @@ async function onlineAccessToken({ shop, sessionToken, config, fetchImpl = fetch
 /** One GraphQL call as this session. GraphQL-level errors (HTTP 200 with an "errors" list) are failures too. */
 async function graphql(call: AdminCall, query: string, variables: Record<string, unknown>, step: string): Promise<unknown> {
   const { shop, fetchImpl = fetch } = call;
-  const accessToken = await onlineAccessToken(call);
+  const accessToken = call.accessToken ?? (await onlineAccessToken(call));
 
   const reply = (await post(
     fetchImpl,
@@ -180,4 +183,34 @@ export async function listOneTimePurchases(input: AdminCall): Promise<{ gid: str
   if (!parsed.success) throw new ShopifyApiError('Shopify did not return the purchases (list purchases)');
 
   return parsed.data.currentAppInstallation.oneTimePurchases.nodes.map(node => ({ gid: node.id, status: node.status }));
+}
+
+const INSTALLATION_QUERY = '{ currentAppInstallation { id } }';
+
+const SET_METAFIELDS = `mutation SetMetafields($metafields: [MetafieldsSetInput!]!) {
+  metafieldsSet(metafields: $metafields) {
+    metafields { key }
+    userErrors { message }
+  }
+}`;
+
+const installationSchema = z.object({ currentAppInstallation: z.object({ id: z.string().min(1) }) });
+const metafieldsSetSchema = z.object({ metafieldsSet: z.object({ userErrors: z.array(z.object({ message: z.string() })) }) });
+
+/**
+ * Stores values on this app's installation in the shop (app data metafields). The theme app extension reads them
+ * in Liquid as `app.metafields.<namespace>.<key>`, which is how the try-on button learns the shop's public key.
+ */
+export async function setAppMetafields(input: AdminCall & { metafields: readonly StorefrontMetafield[] }): Promise<void> {
+  const { metafields, ...call } = input;
+  const withToken = { ...call, accessToken: await onlineAccessToken(call) };
+
+  const installation = installationSchema.safeParse(await graphql(withToken, INSTALLATION_QUERY, {}, 'app installation'));
+  if (!installation.success) throw new ShopifyApiError('Shopify did not return the app installation (app installation)');
+
+  const ownerId = installation.data.currentAppInstallation.id;
+  const result = metafieldsSetSchema.safeParse(
+    await graphql(withToken, SET_METAFIELDS, { metafields: metafields.map(field => ({ ...field, ownerId })) }, 'set metafields')
+  );
+  if (!result.success || result.data.metafieldsSet.userErrors.length > 0) throw new ShopifyApiError('Shopify refused the metafields (set metafields)');
 }

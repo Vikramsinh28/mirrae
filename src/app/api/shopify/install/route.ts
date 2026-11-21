@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
+
+import { siteConfig } from '@/app/siteConfig';
 
 import { authenticateShopifyRequest } from '@/lib/shopify/request';
 import { ShopifyService } from '@/services/internal/shopify';
@@ -22,6 +24,17 @@ export async function POST(request: NextRequest) {
 
     const result = await ShopifyService.ensureInstalled({ shop: auth.identity.shop, sessionToken: auth.token, config: auth.config });
     if (!result.ok) return reply({ success: false, message: 'Could not reach Shopify. Please reload.' }, 502);
+
+    // After the response: the extension's values must never slow down or break the page
+    after(() =>
+      ShopifyService.syncStorefrontConfig({
+        shop: auth.identity.shop,
+        sessionToken: auth.token,
+        config: auth.config,
+        publicKey: result.shop.publicKey,
+        appUrl: siteConfig.url,
+      })
+    );
 
     return reply({ success: true, data: { shop: result.shop } }, 200);
   } catch (error) {

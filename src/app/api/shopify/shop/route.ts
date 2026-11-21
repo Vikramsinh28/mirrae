@@ -1,4 +1,6 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, after } from 'next/server';
+
+import { siteConfig } from '@/app/siteConfig';
 
 import { refusal, reply, serverError } from '@/app/api/shopify/shopify-route-helpers';
 
@@ -25,6 +27,17 @@ export async function GET(request: NextRequest) {
       days: query.data.days,
     });
     if (!result.ok) return reply({ success: false, message: 'Could not reach Shopify. Please reload.' }, 502);
+
+    // After the response: the extension's values must never slow down or break the page
+    after(() =>
+      ShopifyService.syncStorefrontConfig({
+        shop: auth.identity.shop,
+        sessionToken: auth.token,
+        config: auth.config,
+        publicKey: result.overview.shop.publicKey,
+        appUrl: siteConfig.url,
+      })
+    );
 
     return reply({ success: true, data: result.overview });
   } catch (error) {
