@@ -86,6 +86,7 @@ export class ShopifyService {
         // Only a shop that was live comes back live: a suspended or paused one keeps its status
         status: existing.status === 'UNINSTALLED' ? 'ACTIVE' : existing.status,
       });
+      syncState.delete(input.shop);
       return { ok: true, row: back };
     }
 
@@ -98,6 +99,7 @@ export class ShopifyService {
         allowedOrigins,
         imageHosts: imageHostsFor(profile),
       });
+      syncState.delete(input.shop);
       return { ok: true, row: created };
     } catch (error) {
       // An embedded app fires several requests at once on first load; the loser of the race reads the winner's shop.
@@ -171,9 +173,12 @@ export class ShopifyService {
   /** The merchant uninstalled the app: the shop stops working at once; its data is kept until Shopify asks for it to be erased. */
   static async markUninstalled(shop: string): Promise<void> {
     await repo.markShopifyShopUninstalled(shop);
+    // Shopify deletes an app's metafields on uninstall, so the next install must write them again
+    syncState.delete(shop);
   }
 
   static async erase(shop: string): Promise<void> {
     await repo.eraseShopifyShop(shop);
+    syncState.delete(shop);
   }
 }
