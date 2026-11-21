@@ -47,6 +47,12 @@ const allowedOriginsFor = (domain: string, profile: ShopProfile): string[] => [
   ...(profile.primaryOrigin && profile.primaryOrigin !== `https://${domain}` ? [profile.primaryOrigin] : []),
 ];
 
+/** Product images: Shopify's CDN plus the primary domain (a store with a custom domain can serve its images from there). Hosts the merchant already trusts are kept. */
+const imageHostsFor = (profile: ShopProfile, current: readonly string[] = []): string[] => {
+  const primaryHost = profile.primaryOrigin ? new URL(profile.primaryOrigin).hostname : null;
+  return [...new Set([...SHOPIFY_IMAGE_HOSTS, ...current, ...(primaryHost ? [primaryHost] : [])])];
+};
+
 export type SyncOutcome = 'SYNCED' | 'SKIPPED' | 'FAILED';
 
 export class ShopifyService {
@@ -76,6 +82,7 @@ export class ShopifyService {
         name: profile.name,
         contactEmail: profile.contactEmail,
         allowedOrigins,
+        imageHosts: imageHostsFor(profile, existing.imageHosts),
         // Only a shop that was live comes back live: a suspended or paused one keeps its status
         status: existing.status === 'UNINSTALLED' ? 'ACTIVE' : existing.status,
       });
@@ -89,7 +96,7 @@ export class ShopifyService {
         contactEmail: profile.contactEmail,
         publicKey: generatePublicKey(),
         allowedOrigins,
-        imageHosts: SHOPIFY_IMAGE_HOSTS,
+        imageHosts: imageHostsFor(profile),
       });
       return { ok: true, row: created };
     } catch (error) {

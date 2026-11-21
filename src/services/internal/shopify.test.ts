@@ -51,7 +51,7 @@ describe('ShopifyService.ensureInstalled', () => {
       contactEmail: 'owner@example.com',
       publicKey: 'pk_live_new',
       allowedOrigins: [`https://${SHOP}`, 'https://www.example.com'],
-      imageHosts: ['cdn.shopify.com'],
+      imageHosts: ['cdn.shopify.com', 'www.example.com'],
     });
   });
 
@@ -62,11 +62,11 @@ describe('ShopifyService.ensureInstalled', () => {
 
     await ShopifyService.ensureInstalled(input);
 
-    expect(r.createShopifyShopWithOwner).toHaveBeenCalledWith(expect.objectContaining({ allowedOrigins: [`https://${SHOP}`] }));
+    expect(r.createShopifyShopWithOwner).toHaveBeenCalledWith(expect.objectContaining({ allowedOrigins: [`https://${SHOP}`], imageHosts: ['cdn.shopify.com'] }));
   });
 
   test('brings a returning merchant back with the same public key', async () => {
-    r.findShopifyShop.mockResolvedValue({ ...row, status: 'UNINSTALLED' } as never);
+    r.findShopifyShop.mockResolvedValue({ ...row, status: 'UNINSTALLED', imageHosts: ['cdn.shopify.com', 'images.mine.test'] } as never);
     r.reactivateShopifyShop.mockResolvedValue(row as never);
 
     const result = await ShopifyService.ensureInstalled(input);
@@ -76,6 +76,7 @@ describe('ShopifyService.ensureInstalled', () => {
       name: 'My Store',
       contactEmail: 'owner@example.com',
       allowedOrigins: [`https://${SHOP}`, 'https://www.example.com'],
+      imageHosts: ['cdn.shopify.com', 'images.mine.test', 'www.example.com'],
       status: 'ACTIVE',
     });
     expect(r.createShopifyShopWithOwner).not.toHaveBeenCalled();
