@@ -13,9 +13,9 @@ import type { UpdateShopInput } from '@/validations/shop';
 const SHOPIFY_IMAGE_HOSTS = ['cdn.shopify.com'];
 
 // The extension's values (shop key, widget address) only change when the key or the app address does, so they are
-// rewritten at most once an hour per shop, and a failure is retried after a few minutes instead of on every page load.
+// rewritten at most once an hour per shop, and a failure is retried after 20 seconds instead of on every page load (the first call after an install often fails because the session token has expired or the network blipped, and until it works the store has no button).
 const SYNC_INTERVAL_MS = 60 * 60 * 1000;
-const SYNC_RETRY_MS = 5 * 60 * 1000;
+const SYNC_RETRY_MS = 20 * 1000;
 const MAX_TRACKED_SHOPS = 10_000;
 const syncState = new Map<string, { at: number; ok: boolean }>();
 
