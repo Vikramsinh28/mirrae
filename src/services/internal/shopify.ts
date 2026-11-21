@@ -1,7 +1,8 @@
 import { generatePublicKey } from '@/lib/storefront/public-key';
 import type { ShopifyConfig } from '@/lib/shopify/config';
 import type { Shop } from '@/lib/prisma/generated/client';
-import { fetchShopProfile, ShopifyApiError, type ShopProfile } from '@/services/external/shopify/admin';
+import { storefrontMetafields } from '@/lib/shopify/storefront-config';
+import { fetchShopProfile, setAppMetafields, ShopifyApiError, type ShopProfile } from '@/services/external/shopify/admin';
 import * as repo from '@/services/repositories/shopify';
 import { CreditService } from './credit';
 import { ShopService, uniqueViolationOn, type ShopUsage } from './shop';
@@ -10,6 +11,13 @@ import type { UpdateShopInput } from '@/validations/shop';
 /** Mirrae for Shopify stores: installing, uninstalling and erasing a shop. Callers verify the Shopify token or webhook signature first. */
 
 const SHOPIFY_IMAGE_HOSTS = ['cdn.shopify.com'];
+
+// The extension's values (shop key, widget address) only change when the key or the app address does, so they are
+// rewritten at most once an hour per shop, and a failure is retried after a few minutes instead of on every page load.
+const SYNC_INTERVAL_MS = 60 * 60 * 1000;
+const SYNC_RETRY_MS = 5 * 60 * 1000;
+const MAX_TRACKED_SHOPS = 10_000;
+const syncState = new Map<string, { at: number; ok: boolean }>();
 
 export interface InstalledShop {
   id: string;
@@ -38,6 +46,8 @@ const allowedOriginsFor = (domain: string, profile: ShopProfile): string[] => [
   `https://${domain}`,
   ...(profile.primaryOrigin && profile.primaryOrigin !== `https://${domain}` ? [profile.primaryOrigin] : []),
 ];
+
+export type SyncOutcome = 'SYNCED' | 'SKIPPED' | 'FAILED';
 
 export class ShopifyService {
   /**
@@ -118,6 +128,36 @@ export class ShopifyService {
 
     const result = await ShopService.update(row.ownerId, row.id, { status });
     return result.ok ? { ok: true, shop: toInstalled({ ...row, ...result.shop } as Shop) } : result;
+  }
+
+  /**
+   * Gives the theme app extension what it needs to show the try-on button (the shop's public key and where the widget
+   * script lives) by storing it on the app installation. Best effort and throttled: it never blocks or fails a page load.
+   */
+  static async syncStorefrontConfig(
+    input: SessionInput & { publicKey: string; appUrl: string | undefined; now?: number }
+  ): Promise<SyncOutcome> {
+    const now = input.now ?? Date.now();
+    const last = syncState.get(input.shop);
+    if (last && now - last.at < (last.ok ? SYNC_INTERVAL_MS : SYNC_RETRY_MS)) return 'SKIPPED';
+
+    const metafields = storefrontMetafields(input.publicKey, input.appUrl);
+    if (!metafields) {
+      console.warn('Shopify storefront config not synced: the app address must be https (set NEXT_PUBLIC_APP_URL)');
+      return 'SKIPPED';
+    }
+
+    if (syncState.size >= MAX_TRACKED_SHOPS) syncState.clear();
+    try {
+      await setAppMetafields({ shop: input.shop, sessionToken: input.sessionToken, config: input.config, metafields });
+      syncState.set(input.shop, { at: now, ok: true });
+      return 'SYNCED';
+    } catch (error) {
+      if (!(error instanceof ShopifyApiError)) throw error;
+      console.error('Shopify storefront config sync failed:', error.message);
+      syncState.set(input.shop, { at: now, ok: false });
+      return 'FAILED';
+    }
   }
 
   /** The merchant uninstalled the app: the shop stops working at once; its data is kept until Shopify asks for it to be erased. */

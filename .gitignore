@@ -50,3 +50,6 @@ src/lib/prisma/generated
 public/widget.js
 # Temporary files for local widget checks
 public/__test-*
+
+# Shopify CLI local state
+.shopify/

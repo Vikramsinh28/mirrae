@@ -1,4 +1,4 @@
-import { fetchShopProfile, ShopifyApiError } from '@/services/external/shopify/admin';
+import { fetchShopProfile, setAppMetafields, ShopifyApiError } from '@/services/external/shopify/admin';
 import * as repo from '@/services/repositories/shopify';
 import { CreditService } from './credit';
 import { ShopService } from './shop';
@@ -6,6 +6,7 @@ import { ShopifyService } from './shopify';
 
 jest.mock('@/services/external/shopify/admin', () => ({
   fetchShopProfile: jest.fn(),
+  setAppMetafields: jest.fn(),
   ShopifyApiError: class extends Error {},
 }));
 jest.mock('@/services/repositories/shopify');
@@ -203,5 +204,67 @@ describe('ShopifyService.setLive', () => {
     (ShopService.update as jest.Mock).mockResolvedValue({ ok: false, reason: 'LOCKED' });
 
     await expect(ShopifyService.setLive(SHOP, 'ACTIVE')).resolves.toEqual({ ok: false, reason: 'LOCKED' });
+  });
+});
+
+describe('ShopifyService.syncStorefrontConfig', () => {
+  const metafieldsMock = setAppMetafields as jest.Mock;
+  const KEY = 'pk_live_0123456789abcdef0123456789abcdef';
+  const APP = 'https://app.mirrae.test';
+  let counter = 0;
+  // Each test uses its own shop: the throttle remembers shops between calls
+  const sync = (overrides: Partial<Parameters<typeof ShopifyService.syncStorefrontConfig>[0]> = {}) =>
+    ShopifyService.syncStorefrontConfig({ shop: `sync-${counter}.myshopify.com`, sessionToken: 'jwt', config: CONFIG, publicKey: KEY, appUrl: APP, ...overrides });
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+    counter += 1;
+  });
+
+  test('stores the shop key and the widget address for the theme extension', async () => {
+    expect(await sync()).toBe('SYNCED');
+
+    expect(metafieldsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metafields: [
+          expect.objectContaining({ key: 'public_key', value: KEY }),
+          expect.objectContaining({ key: 'widget_url', value: `${APP}/widget.js` }),
+        ],
+      })
+    );
+  });
+
+  test('does not repeat the work on the next page load within the hour, but does again later', async () => {
+    const shop = `repeat-${counter}.myshopify.com`;
+    const t0 = 1_800_000_000_000;
+
+    expect(await sync({ shop, now: t0 })).toBe('SYNCED');
+    expect(await sync({ shop, now: t0 + 30 * 60 * 1000 })).toBe('SKIPPED');
+    expect(await sync({ shop, now: t0 + 61 * 60 * 1000 })).toBe('SYNCED');
+    expect(metafieldsMock).toHaveBeenCalledTimes(2);
+  });
+
+  test('retries a failure after a few minutes, not on every page load, and never throws for a Shopify failure', async () => {
+    const shop = `fail-${counter}.myshopify.com`;
+    const t0 = 1_800_000_000_000;
+    metafieldsMock.mockRejectedValueOnce(new ShopifyApiError('refused'));
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    expect(await sync({ shop, now: t0 })).toBe('FAILED');
+    expect(await sync({ shop, now: t0 + 60 * 1000 })).toBe('SKIPPED');
+    expect(await sync({ shop, now: t0 + 6 * 60 * 1000 })).toBe('SYNCED');
+  });
+
+  test('does nothing when the app address is not https (a store page could not load the script)', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    expect(await sync({ appUrl: 'http://localhost:3000' })).toBe('SKIPPED');
+    expect(metafieldsMock).not.toHaveBeenCalled();
+  });
+
+  test('does not hide a bug that is not a Shopify failure', async () => {
+    metafieldsMock.mockRejectedValueOnce(new TypeError('bug'));
+
+    await expect(sync()).rejects.toThrow(TypeError);
   });
 });

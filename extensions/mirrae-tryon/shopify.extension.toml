@@ -1,0 +1,6 @@
+api_version = "2026-10"
+
+[[extensions]]
+type = "theme"
+name = "Mirrae try-on"
+handle = "mirrae-tryon"
