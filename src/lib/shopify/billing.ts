@@ -9,12 +9,14 @@ export interface CreditPack {
   priceUsd: number;
 }
 
-// PLACEHOLDER PRICES: the owner has not set real ones yet. Work out cost per credit (Vertex + Gemini) and
-// Shopify's revenue share before switching billing to live. Ordered smallest to largest.
+// Prices set 2026-11-22 from an estimated cost of about $0.076 per credit (Vertex ~$0.06 per front view, Gemini
+// ~$0.039 per extra view, plus 10% for retries and failures; both figures are third-party and still to be confirmed
+// on the GCP billing page). That leaves about 43% / 40% / 34% after Shopify's 15% revenue share (0% on the first $1M
+// lifetime, per Shopify's docs). Re-check before billing goes live. Ordered smallest to largest.
 export const CREDIT_PACKS: readonly CreditPack[] = [
   { id: 'pack_50', credits: 50, priceUsd: 9 },
-  { id: 'pack_200', credits: 200, priceUsd: 29 },
-  { id: 'pack_1000', credits: 1000, priceUsd: 129 },
+  { id: 'pack_200', credits: 200, priceUsd: 34 },
+  { id: 'pack_1000', credits: 1000, priceUsd: 149 },
 ];
 
 const PACKS_BY_ID = new Map(CREDIT_PACKS.map(pack => [pack.id, pack]));
