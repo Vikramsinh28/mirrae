@@ -1,7 +1,7 @@
 # Mirrae for Shopify. Learn more: https://shopify.dev/docs/apps/tools/cli/configuration
 #
-# BEFORE `shopify app deploy`: replace every https://example.com below with the address the app is served from
-# (a tunnel while developing, the real domain in production). See docs/shopify-dev-setup.md.
+# The https://example.com addresses below are PLACEHOLDERS. Put the tunnel address (development) or the real domain
+# (production) in before `shopify app deploy`, and never commit a tunnel address. See docs/shopify-dev-setup.md.
 
 client_id = "62db0ffc96bb88cda0a9b3d7ed4904c3"
 name = "Mirrae"
@@ -10,25 +10,24 @@ application_url = "https://example.com/shopify"
 embedded = true
 
 [build]
-include_config_on_deploy = true
-
-[access_scopes]
-# None needed: the shop name and domain, billing and the app's own metafields work without any scope
-scopes = ""
-
-[auth]
-# Unused: installation is managed by Shopify and the app swaps session tokens (no OAuth redirect)
-redirect_urls = [ "https://example.com/api/auth/callback" ]
 
 [webhooks]
 api_version = "2026-10"
 
+  # app/uninstalled and the purchase updates, plus the three privacy topics every App Store app must answer. Mirrae keeps
+  # no shopper personal data (the photo is deleted after the front view and events are anonymous), so the customer
+  # topics are only acknowledged; shop/redact erases the shop. All of them go to the one route.
   [[webhooks.subscriptions]]
-  topics = [ "app/uninstalled", "app_purchases_one_time/update" ]
   uri = "https://example.com/api/shopify/webhooks"
-
-  # Required of every App Store app. Mirrae keeps no shopper personal data (the photo is deleted after the front
-  # view and events are anonymous), so the customer topics are only acknowledged; shop/redact erases the shop.
-  [[webhooks.subscriptions]]
   compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
-  uri = "https://example.com/api/shopify/webhooks"
+  topics = [ "app_purchases_one_time/update", "app/uninstalled" ]
+
+[access_scopes]
+# None needed: the shop name and domain, billing and the app's own metafields work without any scope
+scopes = ""
+optional_scopes = [ ]
+use_legacy_install_flow = false
+
+[auth]
+# Unused: installation is managed by Shopify and the app swaps session tokens (no OAuth redirect)
+redirect_urls = [ "https://example.com/api/auth/callback" ]

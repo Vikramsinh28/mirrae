@@ -151,6 +151,7 @@ export class ShopifyService {
     try {
       await setAppMetafields({ shop: input.shop, sessionToken: input.sessionToken, config: input.config, metafields });
       syncState.set(input.shop, { at: now, ok: true });
+      console.info(`Shopify storefront config stored for ${input.shop}`);
       return 'SYNCED';
     } catch (error) {
       if (!(error instanceof ShopifyApiError)) throw error;
