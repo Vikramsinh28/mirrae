@@ -1,6 +1,7 @@
 import { createApi, WidgetApiError, type Api, type DoneStatus } from './api';
 import { findCartButton, type CartButtonLike } from './cart';
 import type { WidgetConfig } from './config';
+import { HOST_TAG } from './host';
 import { directionOf, errorText, STRINGS, type Strings } from './i18n';
 import { findProductImage } from './product-image';
 import { shareImage } from './share';
@@ -64,7 +65,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
 }
 
 function shadowHost(css: string, color: string): { host: HTMLElement; root: ShadowRoot } {
-  const host = document.createElement('div');
+  const host = document.createElement(HOST_TAG);
   host.style.setProperty('--mirrae-color', color);
   const root = host.attachShadow({ mode: 'open' });
   root.append(el('style', {}, css));
