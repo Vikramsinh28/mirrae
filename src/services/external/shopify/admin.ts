@@ -19,6 +19,11 @@ const ONLINE_TOKEN_TYPE = 'urn:shopify:params:oauth:token-type:online-access-tok
 
 const SHOP_QUERY = '{ shop { name email primaryDomain { url } } }';
 
+/** Shopify's own explanation of a refused mutation, short enough for a log line (it never contains a token or the secret). */
+function userErrorText(errors: readonly { message: string }[]): string {
+  return errors.map(error => error.message).join('; ').slice(0, 200);
+}
+
 /** A Shopify call failed. The message says which step, and never contains a secret or a token. */
 export class ShopifyApiError extends Error {
   constructor(message: string) {
@@ -172,7 +177,10 @@ export async function createOneTimePurchase(
   if (!parsed.success) throw new ShopifyApiError('Shopify did not return the purchase (create purchase)');
 
   const { appPurchaseOneTime, confirmationUrl, userErrors } = parsed.data.appPurchaseOneTimeCreate;
-  if (userErrors.length > 0 || !appPurchaseOneTime || !confirmationUrl) throw new ShopifyApiError('Shopify refused the purchase (create purchase)');
+  if (userErrors.length > 0 || !appPurchaseOneTime || !confirmationUrl) {
+    // The reason matters: "Apps without a public distribution cannot use the Billing API" looked like a bug in our code
+    throw new ShopifyApiError(`Shopify refused the purchase (create purchase): ${userErrorText(userErrors) || 'no reason given'}`);
+  }
 
   return { gid: appPurchaseOneTime.id, confirmationUrl };
 }
@@ -212,5 +220,8 @@ export async function setAppMetafields(input: AdminCall & { metafields: readonly
   const result = metafieldsSetSchema.safeParse(
     await graphql(withToken, SET_METAFIELDS, { metafields: metafields.map(field => ({ ...field, ownerId })) }, 'set metafields')
   );
-  if (!result.success || result.data.metafieldsSet.userErrors.length > 0) throw new ShopifyApiError('Shopify refused the metafields (set metafields)');
+  if (!result.success) throw new ShopifyApiError('Shopify did not return the metafield result (set metafields)');
+  if (result.data.metafieldsSet.userErrors.length > 0) {
+    throw new ShopifyApiError(`Shopify refused the metafields (set metafields): ${userErrorText(result.data.metafieldsSet.userErrors)}`);
+  }
 }

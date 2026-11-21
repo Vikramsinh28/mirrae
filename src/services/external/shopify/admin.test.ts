@@ -101,12 +101,17 @@ describe('one-time purchases', () => {
     expect(body.variables).toEqual({ name: '50 credits', price: { amount: 9, currencyCode: 'USD' }, returnUrl: `https://${SHOP}/admin/apps/x`, test: true });
   });
 
-  test('fails when Shopify reports user errors', async () => {
+  test('fails when Shopify reports user errors, and says why', async () => {
+    const reason = 'Apps without a public distribution cannot use the Billing API';
     const fetchImpl = jest.fn().mockResolvedValueOnce(exchange()).mockResolvedValueOnce(
-      json(200, { data: { appPurchaseOneTimeCreate: { appPurchaseOneTime: null, confirmationUrl: null, userErrors: [{ message: 'nope' }] } } })
+      json(200, { data: { appPurchaseOneTimeCreate: { appPurchaseOneTime: null, confirmationUrl: null, userErrors: [{ message: reason }] } } })
     );
 
-    await expect(createOneTimePurchase({ ...call(fetchImpl), name: 'x', priceUsd: 9, returnUrl: 'https://x.test', test: true })).rejects.toThrow(ShopifyApiError);
+    const error = await createOneTimePurchase({ ...call(fetchImpl), name: 'x', priceUsd: 9, returnUrl: 'https://x.test', test: true }).catch((caught: Error) => caught);
+
+    expect(error).toBeInstanceOf(ShopifyApiError);
+    expect((error as Error).message).toContain(reason);
+    expect((error as Error).message).not.toMatch(/client-secret|session\.jwt|shpat_/);
   });
 
   test('lists the latest purchases with their status', async () => {
@@ -157,7 +162,7 @@ describe('setAppMetafields', () => {
       .mockResolvedValueOnce(json(200, { data: { currentAppInstallation: { id: 'gid://x' } } }))
       .mockResolvedValueOnce(json(200, { data: { metafieldsSet: { metafields: [], userErrors: [{ message: 'nope' }] } } }));
 
-    await expect(setAppMetafields(call(fetchImpl))).rejects.toThrow(ShopifyApiError);
+    await expect(setAppMetafields(call(fetchImpl))).rejects.toThrow(/nope/);
   });
 
   test('fails when there is no app installation to own the values', async () => {
