@@ -60,7 +60,7 @@ export const createShopifyShopWithOwner = (data: NewShopifyShop) =>
  */
 export const reactivateShopifyShop = (
   id: string,
-  data: { name: string; contactEmail: string | null; allowedOrigins: string[]; status: Shop['status'] }
+  data: { name: string; contactEmail: string | null; allowedOrigins: string[]; imageHosts: string[]; status: Shop['status'] }
 ) => prisma.shop.update({ where: { id }, data: { ...data, uninstalledAt: null } });
 
 /**
