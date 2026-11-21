@@ -235,6 +235,16 @@ describe('ShopifyService.syncStorefrontConfig', () => {
     );
   });
 
+  test('writes again after an uninstall and reinstall, because Shopify deletes the metafields on uninstall', async () => {
+    const shop = `reinstall-${counter}.myshopify.com`;
+    expect(await sync({ shop })).toBe('SYNCED');
+    expect(await sync({ shop })).toBe('SKIPPED');
+
+    await ShopifyService.markUninstalled(shop);
+
+    expect(await sync({ shop })).toBe('SYNCED');
+  });
+
   test('does not repeat the work on the next page load within the hour, but does again later', async () => {
     const shop = `repeat-${counter}.myshopify.com`;
     const t0 = 1_800_000_000_000;
