@@ -1,0 +1,54 @@
+# Builds the two images (the app and the migration job) on Google's amd64 machines. A Mac with an Apple chip
+# builds arm64 images, which Cloud Run cannot run, so build here and not with a local `docker build`.
+#
+#   gcloud builds submit --config infra/cloudbuild.yaml \
+#     --substitutions _REGION=asia-southeast1,_REPO=mirrae,_APP_URL=https://mirrae.org .
+#
+# NEXT_PUBLIC_APP_URL is baked into the browser bundle, so _APP_URL must be the real https address.
+substitutions:
+  _REGION: asia-southeast1
+  _REPO: mirrae
+  _APP_URL: https://mirrae.org
+
+steps:
+  - id: app
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - infra/Dockerfile
+      - --build-arg
+      - NEXT_PUBLIC_APP_URL=${_APP_URL}
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/mirrae:$BUILD_ID
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/mirrae:latest
+      - .
+
+  # Same Docker daemon, so the shared build stages come from the cache
+  - id: migrate
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - infra/Dockerfile
+      - --target
+      - migrate
+      - --build-arg
+      - NEXT_PUBLIC_APP_URL=${_APP_URL}
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/migrate:$BUILD_ID
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/migrate:latest
+      - .
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/mirrae:$BUILD_ID
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/mirrae:latest
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/migrate:$BUILD_ID
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/migrate:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1800s
