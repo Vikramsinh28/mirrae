@@ -7,7 +7,7 @@ Anything in [square brackets] is a blank to fill or a decision to make. See READ
 
 **Mirrae** · Last updated: [date]
 
-These terms are an agreement between [legal entity name], [registered address] ("Mirrae", "we") and the business that installs or uses Mirrae ("you", "the merchant"). If you use Mirrae for a company, you confirm you can bind it. If you do not agree, do not install or use Mirrae. Shoppers who use the button on a store are covered by the [Privacy Policy](./privacy-policy-draft.md) and the store's own terms, not by these terms.
+These terms are an agreement between TechMen Infotech, 2375 B, 7 Rajputwada, Prashant Tenaments, Shubhashanagar, Bhavnagar, Gujarat 364001, India ("Mirrae", "we") and the business that installs or uses Mirrae ("you", "the merchant"). If you use Mirrae for a company, you confirm you can bind it. If you do not agree, do not install or use Mirrae. Shoppers who use the button on a store are covered by the [Privacy Policy](./privacy-policy-draft.md) and the store's own terms, not by these terms.
 
 ## 1. The service
 
@@ -75,7 +75,7 @@ You will compensate us for claims from a third party (including a shopper or a r
 
 ## 14. Governing law
 
-These terms are governed by the law of [jurisdiction]. Disputes go to the courts of [city, country], unless the law gives you the right to go elsewhere. [Consider whether to add arbitration.]
+These terms are governed by the law of India [confirm]. Disputes go to the courts of Bhavnagar, Gujarat, India [confirm], unless the law gives you the right to go elsewhere. [Consider whether to add arbitration.]
 
 ## 15. Changes to these terms
 
@@ -83,4 +83,4 @@ We may update these terms. For a change that matters we will tell you in the das
 
 ## 16. Contact
 
-[Legal entity name] · [address] · connect@mirrae.org
+TechMen Infotech · 2375 B, 7 Rajputwada, Prashant Tenaments, Shubhashanagar, Bhavnagar, Gujarat 364001, India · connect@mirrae.org
