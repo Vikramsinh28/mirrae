@@ -7,7 +7,7 @@ Anything in [square brackets] is a blank to fill or a decision to make. See READ
 
 **Mirrae** · Last updated: [date]
 
-Mirrae ("we", "us") is operated by [legal entity name], [registered address]. It lets online stores add a "Try it on" button to their product pages, so a shopper can see a clothing item on a photo of themselves. This policy explains what we collect, why, who else sees it, and how long we keep it. It covers two groups of people: **shoppers** who use the button on a store, and **merchants** who run those stores.
+Mirrae ("we", "us") is operated by TechMen Infotech, 2375 B, 7 Rajputwada, Prashant Tenaments, Shubhashanagar, Bhavnagar, Gujarat 364001, India. It lets online stores add a "Try it on" button to their product pages, so a shopper can see a clothing item on a photo of themselves. This policy explains what we collect, why, who else sees it, and how long we keep it. It covers two groups of people: **shoppers** who use the button on a store, and **merchants** who run those stores.
 
 Questions or requests: connect@mirrae.org.
 
@@ -98,4 +98,4 @@ If we change this policy in a way that matters we will update the date above and
 
 ## 9. Contact
 
-[Legal entity name] · [address] · connect@mirrae.org
+TechMen Infotech · 2375 B, 7 Rajputwada, Prashant Tenaments, Shubhashanagar, Bhavnagar, Gujarat 364001, India · connect@mirrae.org
