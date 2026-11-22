@@ -7,7 +7,13 @@ Written 2026-11-22. Everything today runs on a laptop behind a tunnel. This is t
 Mirrae is a **long-running Node process** (`npm run build`, then `npm start`), not serverless: background work uses `after()` and the rate limits and the Shopify sync throttle are kept per process. So run **one instance** (or move those to a shared store first).
 
 - Node 22, Postgres 16, outbound https to Google, AWS, Shopify and Stripe.
-- `infra/Dockerfile` exists (unverified; check that it builds the widget and runs `next start`).
+- **`infra/Dockerfile` is verified** (2026-11-22, built and run locally): the default target is a small `node server.js` image that runs as a non-root user and listens on `PORT` (3000 by default). Build it with the real address, because `NEXT_PUBLIC_*` values are baked in at build time:
+
+  ```bash
+  docker build -f infra/Dockerfile --build-arg NEXT_PUBLIC_APP_URL=https://app.example.com -t mirrae .
+  ```
+
+  Migrations run from a separate target as a one-off job with `POSTGRES_URL` set: `docker build -f infra/Dockerfile --target migrate -t mirrae-migrate ...`, then run that image (its command is `pnpm run migrate:prod`). All migrations were applied from scratch to an empty database with it.
 - Give it a real **https domain**, for example `app.<your domain>`.
 
 ## 2. Database
@@ -25,7 +31,7 @@ Mirrae is a **long-running Node process** (`npm run build`, then `npm start`), n
 | `JWT_SECRET`, `JWT_KEY` | **new long random values**. `.env.example` ships `test_jwt_secret` and `boilerplate-token`: never use those in production (the app does not refuse them) |
 | `STOREFRONT_TOKEN_SECRET` | new long random value. It also signs the website-ownership DNS tokens: changing it later invalidates both |
 | `NEXT_PUBLIC_FILE_STORAGE_DRIVER` | `s3` (the code defaults to `r2`) |
-| `AWS_REGION`, `S3_PRIVATE_BUCKET_NAME` | `ap-south-1`, the private bucket. Prefer an instance role over `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` if the host supports one |
+| `AWS_REGION`, `S3_PRIVATE_BUCKET_NAME`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `ap-south-1`, the private bucket, and the `mirrae-app` IAM user's keys. **The keys are required**: the S3 code throws without them, so a host's own role is not enough (and a Google Cloud host cannot supply AWS credentials) |
 | `GOOGLE_CLOUD_PROJECT`, `VERTEX_LOCATION` | the project, `us-central1` |
 | Google credentials | **an attached service account or workload identity**: the org policy blocks service-account keys, so `GOOGLE_SERVICE_ACCOUNT_JSON` may not be possible |
 | `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET` | the client ID and the **rotated** secret |

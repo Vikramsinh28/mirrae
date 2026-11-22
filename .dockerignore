@@ -19,3 +19,12 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# Not needed to build or run the app
+.git
+.claude
+.experiments
+.shopify
+docs
+design-system
+src/lib/prisma/generated

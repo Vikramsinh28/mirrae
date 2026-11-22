@@ -1,9 +1,11 @@
+# Which dependencies may run install scripts. pnpm refuses to install (and the Docker build fails) while any of these
+# is undecided. true = needed to build or run the app; false = development tooling or optional.
 allowBuilds:
-  '@parcel/watcher': set this to true or false
-  '@prisma/engines': set this to true or false
-  '@sentry/cli': set this to true or false
-  esbuild: set this to true or false
-  msw: set this to true or false
-  prisma: set this to true or false
-  sharp: set this to true or false
-  unrs-resolver: set this to true or false
+  '@parcel/watcher': false # file watcher used by dev tooling
+  '@prisma/engines': true # downloads the schema engine that `prisma migrate deploy` needs
+  '@sentry/cli': false # only for uploading source maps, which is not configured
+  esbuild: true # builds public/widget.js
+  msw: false # test tooling
+  prisma: true
+  sharp: true # photo clean-up before every try-on
+  unrs-resolver: false # eslint tooling
