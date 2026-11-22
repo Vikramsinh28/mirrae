@@ -9,7 +9,7 @@ Anything in [square brackets] is a blank to fill or a decision to make. See READ
 
 Mirrae ("we", "us") is operated by [legal entity name], [registered address]. It lets online stores add a "Try it on" button to their product pages, so a shopper can see a clothing item on a photo of themselves. This policy explains what we collect, why, who else sees it, and how long we keep it. It covers two groups of people: **shoppers** who use the button on a store, and **merchants** who run those stores.
 
-Questions or requests: [privacy contact email].
+Questions or requests: connect@mirrae.org.
 
 ## 1. Shoppers
 
@@ -80,11 +80,11 @@ Storage is in India (AWS Mumbai). Photos are processed by Google in the United S
 
 ## 5. Security
 
-Photos and results are kept in a private storage bucket that is not open to the public and are shown through short-lived links. Connections use HTTPS. Access to our systems is limited to what each person needs. No system is perfectly secure, so please report concerns to [security contact].
+Photos and results are kept in a private storage bucket that is not open to the public and are shown through short-lived links. Connections use HTTPS. Access to our systems is limited to what each person needs. No system is perfectly secure, so please report concerns to connect@mirrae.org.
 
 ## 6. Your choices and rights
 
-Depending on where you live (for example the EU, UK or India) you may have the right to ask what we hold about you, to correct or delete it, to object to or restrict its use, to withdraw consent, and to complain to your data protection authority. Because shoppers are anonymous and their photos are deleted within minutes, we usually hold nothing that can be tied to a particular person; if you think we do, write to [privacy contact email] with the store and the approximate time. Merchants can change their settings in the dashboard and can ask us to delete their account.
+Depending on where you live (for example the EU, UK or India) you may have the right to ask what we hold about you, to correct or delete it, to object to or restrict its use, to withdraw consent, and to complain to your data protection authority. Because shoppers are anonymous and their photos are deleted within minutes, we usually hold nothing that can be tied to a particular person; if you think we do, write to connect@mirrae.org with the store and the approximate time. Merchants can change their settings in the dashboard and can ask us to delete their account.
 
 [Legal bases if you serve people in the EU/UK: consent for the shopper photo; contract for merchants; legitimate interests for security and analytics.]
 
@@ -98,4 +98,4 @@ If we change this policy in a way that matters we will update the date above and
 
 ## 9. Contact
 
-[Legal entity name] · [address] · [privacy contact email]
+[Legal entity name] · [address] · connect@mirrae.org

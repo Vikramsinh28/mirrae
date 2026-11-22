@@ -4,7 +4,7 @@
 
 ## What you must decide or fill in (also marked `[like this]` in the drafts)
 
-1. **Legal entity, address and contact emails** (privacy, support, security). The site has no contact email in `siteConfig` today.
+1. **Legal entity and address.** Contact email: the drafts use `connect@mirrae.org` for privacy, support and security (confirm that one address is enough; the site has no contact email in `siteConfig` today).
 2. **Governing law and courts.** Country and city; arbitration yes or no.
 3. **Credits:** do they expire? Refund policy? Are prices tax-inclusive? (Code: credits do not expire; nothing handles refunds.)
 4. **Retention of try-on records.** They hold status, times, consent time and image keys, no photos. `scripts/purge-tryon-jobs.ts` deletes finished ones older than N days (default 180, minimum 90 because the dashboard shows 90 days of usage; dry run unless `--apply`). The privacy draft says 180 days: confirm it, and **schedule the script** (for example monthly) once there is a host, because nothing runs it by itself.

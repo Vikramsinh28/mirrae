@@ -83,4 +83,4 @@ We may update these terms. For a change that matters we will tell you in the das
 
 ## 16. Contact
 
-[Legal entity name] · [address] · [support email]
+[Legal entity name] · [address] · connect@mirrae.org

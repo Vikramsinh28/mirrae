@@ -48,7 +48,4 @@ images:
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/migrate:$BUILD_ID
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/migrate:latest
 
-options:
-  logging: CLOUD_LOGGING_ONLY
-
 timeout: 1800s
