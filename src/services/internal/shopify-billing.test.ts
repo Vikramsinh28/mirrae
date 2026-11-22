@@ -61,6 +61,22 @@ describe('ShopifyBillingService.startPurchase', () => {
     expect(createPurchase).not.toHaveBeenCalled();
   });
 
+  test('refuses to open yet another approval page while several are already waiting, without calling Shopify', async () => {
+    charges.countRecentPendingCharges.mockResolvedValue(5);
+
+    const result = await ShopifyBillingService.startPurchase({ ...session, packId: 'pack_50' });
+
+    expect(result).toEqual({ ok: false, reason: 'TOO_MANY_PENDING' });
+    expect(createPurchase).not.toHaveBeenCalled();
+    expect(charges.countRecentPendingCharges).toHaveBeenCalledWith('shop-1', expect.any(Date));
+  });
+
+  test('still starts a purchase when only a few are waiting', async () => {
+    charges.countRecentPendingCharges.mockResolvedValue(4);
+
+    expect(await ShopifyBillingService.startPurchase({ ...session, packId: 'pack_50' })).toMatchObject({ ok: true });
+  });
+
   test('refuses a shop that is not installed', async () => {
     shops.findShopifyShop.mockResolvedValue(null);
 

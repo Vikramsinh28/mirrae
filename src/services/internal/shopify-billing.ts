@@ -1,4 +1,4 @@
-import { findPack, isBillingTest, purchaseStatusFromShopify, returnUrlFor, safeConfirmationUrl } from '@/lib/shopify/billing';
+import { findPack, isBillingTest, MAX_PENDING_CHARGES, PENDING_CHARGE_WINDOW_MS, purchaseStatusFromShopify, returnUrlFor, safeConfirmationUrl } from '@/lib/shopify/billing';
 import type { ShopifyConfig } from '@/lib/shopify/config';
 import { createOneTimePurchase, listOneTimePurchases, ShopifyApiError } from '@/services/external/shopify/admin';
 import * as shopRepo from '@/services/repositories/shopify';
@@ -10,7 +10,7 @@ type Session = { shop: string; sessionToken: string; config: ShopifyConfig };
 
 export type PurchaseResult =
   | { ok: true; confirmationUrl: string }
-  | { ok: false; reason: 'UNKNOWN_PACK' | 'NOT_FOUND' | 'LOCKED' | 'SHOPIFY_ERROR' };
+  | { ok: false; reason: 'UNKNOWN_PACK' | 'NOT_FOUND' | 'LOCKED' | 'TOO_MANY_PENDING' | 'SHOPIFY_ERROR' };
 
 export type SyncResult = { ok: true; credited: number } | { ok: false; reason: 'NOT_FOUND' | 'SHOPIFY_ERROR' };
 
@@ -34,6 +34,9 @@ export class ShopifyBillingService {
     const shop = await shopRepo.findShopifyShop(input.shop);
     if (!shop) return { ok: false, reason: 'NOT_FOUND' };
     if (shop.status === 'UNINSTALLED' || shop.status === 'SUSPENDED') return { ok: false, reason: 'LOCKED' };
+
+    const waiting = await chargeRepo.countRecentPendingCharges(shop.id, new Date(Date.now() - PENDING_CHARGE_WINDOW_MS));
+    if (waiting >= MAX_PENDING_CHARGES) return { ok: false, reason: 'TOO_MANY_PENDING' };
 
     const test = isBillingTest();
     const purchase = await shopifyCall('create purchase', () =>

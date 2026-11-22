@@ -279,6 +279,7 @@ describe('Shopify routes', () => {
       ['UNKNOWN_PACK', 400],
       ['NOT_FOUND', 404],
       ['LOCKED', 403],
+      ['TOO_MANY_PENDING', 429],
       ['SHOPIFY_ERROR', 502],
     ] as const)('purchase maps %s to HTTP %i', async (reason, status) => {
       billing.startPurchase.mockResolvedValue({ ok: false, reason });
