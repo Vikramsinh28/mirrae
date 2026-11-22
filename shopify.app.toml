@@ -1,12 +1,12 @@
 # Mirrae for Shopify. Learn more: https://shopify.dev/docs/apps/tools/cli/configuration
 #
-# The https://example.com addresses below are PLACEHOLDERS. Put the tunnel address (development) or the real domain
-# (production) in before `shopify app deploy`, and never commit a tunnel address. See docs/shopify-dev-setup.md.
+# These addresses are the production domain. To try the app through a development tunnel, replace them with the tunnel
+# address for that run only, and never commit a tunnel address. See docs/shopify-dev-setup.md.
 
 client_id = "62db0ffc96bb88cda0a9b3d7ed4904c3"
 name = "Mirrae"
 # The embedded admin page lives at /shopify
-application_url = "https://example.com/shopify"
+application_url = "https://mirrae.org/shopify"
 embedded = true
 
 [build]
@@ -18,7 +18,7 @@ api_version = "2026-10"
   # no shopper personal data (the photo is deleted after the front view and events are anonymous), so the customer
   # topics are only acknowledged; shop/redact erases the shop. All of them go to the one route.
   [[webhooks.subscriptions]]
-  uri = "https://example.com/api/shopify/webhooks"
+  uri = "https://mirrae.org/api/shopify/webhooks"
   compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
   topics = [ "app_purchases_one_time/update", "app/uninstalled" ]
 
@@ -30,4 +30,4 @@ use_legacy_install_flow = false
 
 [auth]
 # Unused: installation is managed by Shopify and the app swaps session tokens (no OAuth redirect)
-redirect_urls = [ "https://example.com/api/auth/callback" ]
+redirect_urls = [ "https://mirrae.org/api/auth/callback" ]

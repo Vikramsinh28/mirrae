@@ -27,7 +27,7 @@ It prints an address like `https://something.trycloudflare.com` (a new one each 
 
 1. In `.env` set `NEXT_PUBLIC_APP_URL=https://something.trycloudflare.com` and restart `npm run dev`. The app
    stores this address on the shop so the theme extension knows where to load `widget.js` from.
-2. In `shopify.app.toml` replace every `https://example.com` with the same address.
+2. In `shopify.app.toml` replace every `https://mirrae.org` with the same address, for this run only. Put the production address back before committing, and run `shopify app deploy` again with the production address when you are done, because the Shopify app has one set of URLs for everyone.
 
 ## 3. Send the configuration and the theme extension to Shopify
 
