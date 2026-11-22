@@ -6,6 +6,10 @@ Why these settings: the app is one long-running process that keeps rate limits a
 
 Cost: an always-on instance plus the smallest Cloud SQL instance is roughly **$50-70 a month** (my estimate, not checked on Google's price calculator: check it before you commit). The free-trial credit pays for it for now.
 
+## Status: deployed on 2026-11-22 (steps 1 to 7)
+
+Service `mirrae` (revision `mirrae-00001-fh4`) at `https://mirrae-1007527773310.asia-southeast1.run.app`, Cloud SQL instance `mirrae-db` (database and user `mirrae`, daily backups), migration job `mirrae-migrate` (all migrations applied), seven secrets in Secret Manager (`jwt-secret`, `jwt-key`, `storefront-token-secret`, `shopify-api-secret`, `aws-access-key-id`, `aws-secret-access-key`, `postgres-url`), images in the Artifact Registry repository `mirrae`. Checked over HTTPS on the `run.app` address: `/`, `/widget.js`, a static file and `/privacy-policy` answer 200, an unregistered route 404, and the storefront session route answers `UNKNOWN_SHOP` for a made-up key (so the database query ran). **Not checked yet:** a real try-on from inside Cloud Run (Vertex AI through the attached service account, and S3), because the production database has no shop; that needs the domain and a Shopify install. Step 8 (the domain) is not done: the Hostinger registration email must be verified first.
+
 ## 0. Variables
 
 ```bash
@@ -77,7 +81,7 @@ gcloud builds submit --config infra/cloudbuild.yaml \
   --substitutions _REGION=$REGION,_REPO=mirrae,_APP_URL=https://mirrae.org .
 ```
 
-If the build is refused for permissions, grant the build service account (the default Compute Engine one in a new project) `roles/cloudbuild.builds.builder`, then run it again. The upload follows `.gcloudignore`.
+A new project needs one grant first: the default Compute Engine service account (`<project number>-compute@developer.gserviceaccount.com`) must have `roles/cloudbuild.builds.builder`, otherwise the source upload is refused with a 403 (done on 2026-11-22). The build log streams to your terminal; the upload follows `.gcloudignore` (about 10 MB).
 
 ## 6. Create the tables
 
