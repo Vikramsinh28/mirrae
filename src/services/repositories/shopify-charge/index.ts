@@ -22,6 +22,10 @@ export const findCharge = (gid: string) => prisma.shopifyCharge.findUnique({ whe
 export const listPendingCharges = (shopId: string) =>
   prisma.shopifyCharge.findMany({ where: { shopId, status: 'PENDING' }, select: { gid: true } });
 
+/** Charges for a shop that were opened since a given time and are still waiting for the merchant. */
+export const countRecentPendingCharges = (shopId: string, since: Date) =>
+  prisma.shopifyCharge.count({ where: { shopId, status: 'PENDING', createdAt: { gte: since } } });
+
 /**
  * Records Shopify's verdict on a charge. For ACTIVE it also pays out the credits, in the SAME transaction that
  * marks the charge as paid (creditedAt), so the credits arrive exactly once however many times, and from

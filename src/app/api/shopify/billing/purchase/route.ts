@@ -30,6 +30,10 @@ export async function POST(request: NextRequest) {
       UNKNOWN_PACK: reply({ success: false, message: 'That credit pack does not exist' }, 400),
       NOT_FOUND: reply({ success: false, message: 'Shop not found' }, 404),
       LOCKED: reply({ success: false, message: 'Credits cannot be bought for this shop right now. Please contact support.' }, 403),
+      TOO_MANY_PENDING: reply(
+        { success: false, message: 'Several purchases are already waiting for your approval. Approve one in Shopify, or try again tomorrow.' },
+        429
+      ),
       SHOPIFY_ERROR: reply({ success: false, message: 'Shopify could not start the purchase. Please try again.' }, 502),
     } as const;
     return failures[result.reason];

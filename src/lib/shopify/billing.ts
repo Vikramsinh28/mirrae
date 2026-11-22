@@ -19,6 +19,14 @@ export const CREDIT_PACKS: readonly CreditPack[] = [
   { id: 'pack_1000', credits: 1000, priceUsd: 149 },
 ];
 
+/**
+ * Every click on a pack opens a new approval page at Shopify and a pending charge here. A shop may have this many
+ * open in the last day: enough for someone who changes their mind a few times, not enough to pile up rows and
+ * Shopify calls. Only the last day counts, so a merchant is never blocked for longer than that.
+ */
+export const MAX_PENDING_CHARGES = 5;
+export const PENDING_CHARGE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 const PACKS_BY_ID = new Map(CREDIT_PACKS.map(pack => [pack.id, pack]));
 
 export const findPack = (id: string): CreditPack | null => PACKS_BY_ID.get(id) ?? null;
