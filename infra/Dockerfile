@@ -1,84 +1,67 @@
 # =============================================================================
-# Stage 1: Base Image
+# Mirrae production image (a long-running `node server.js`, not serverless).
+#
+#   docker build -f infra/Dockerfile \
+#     --build-arg NEXT_PUBLIC_APP_URL=https://app.example.com -t mirrae .
+#
+# NEXT_PUBLIC_* values are baked into the browser bundle at build time, so build with the real address.
+# Database migrations run from the `migrate` target (see the end of this file), not from the app image.
 # =============================================================================
-# Use Node.js 20 Alpine for smaller image size
+
+# Stage 1: base (Node 24 on Alpine; package.json asks for Node >= 22)
 FROM node:24-alpine AS base
-
-# Install system dependencies needed for some npm packages
 RUN apk add --no-cache libc6-compat
-
-# Set working directory
 WORKDIR /app
+# Pinned so a new pnpm release cannot change how the image builds
+RUN corepack enable && corepack prepare pnpm@12.6.0 --activate
 
-# pnpm installation
-RUN corepack enable && corepack prepare pnpm@latest --activate
-
-# =============================================================================
-# Stage 2: Dependencies Installation
-# =============================================================================
+# Stage 2: dependencies (all of them: the build needs the dev dependencies too)
 FROM base AS deps
-
-# Copy package & lock files first for better Docker layer caching
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
 
-# Install all dependencies (including devDependencies for build stage)
-RUN pnpm install
-
-# =============================================================================
-# Stage 3: Build Stage
-# =============================================================================
+# Stage 3: build
 FROM base AS builder
-
-# Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
-
-# Copy all source files
 COPY . .
 
-# Generate Prisma client before building
-RUN pnpm run generate
+# Several modules read these when they are imported, which `next build` does while collecting page data. The
+# placeholders are given to the two commands below only (not as ENV), so they are in no image layer's environment and
+# the runtime image, a different stage, gets its real values from the host.
+RUN POSTGRES_URL=postgresql://build:build@localhost:5432/build pnpm run generate
 
-# Build arguments for Next.js public environment variables
 ARG NEXT_PUBLIC_APP_URL
 ARG NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 ARG NEXT_PUBLIC_SENTRY_DSN
 ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID
+ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL} \
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY} \
+    NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN} \
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
 
-# Set environment variables for build
-ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
-ENV NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY}
-ENV NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN}
-ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+# Builds public/widget.js, then the Next.js app (output: 'standalone')
+RUN POSTGRES_URL=postgresql://build:build@localhost:5432/build \
+    JWT_SECRET=build-stage-placeholder-not-a-secret \
+    STRIPE_SECRET_KEY=sk_test_build_stage_placeholder \
+    pnpm run build
 
-# Build the Next.js application
-RUN pnpm run build
-
-# =============================================================================
-# Stage 4: Production Runtime
-# =============================================================================
-FROM base AS runner
-
-# Set production environment
+# Stage 4: migrations. Build with `--target migrate` and run it as a one-off job with POSTGRES_URL set.
+FROM builder AS migrate
 ENV NODE_ENV=production
+CMD ["pnpm", "run", "migrate:prod"]
 
-# Copy package files and install only production dependencies
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm prune --prod
+# Stage 5: runtime (the default target): the standalone server only, no dev dependencies, not root
+FROM node:24-alpine AS runner
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+ENV NODE_ENV=production \
+    HOSTNAME=0.0.0.0 \
+    PORT=3000
 
-# Copy built application from builder stage
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+COPY --from=builder --chown=node:node /app/.next/standalone ./
+COPY --from=builder --chown=node:node /app/.next/static ./.next/static
+COPY --from=builder --chown=node:node /app/public ./public
 
-# Copy Prisma files for database operations
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
-
-# Expose port
+USER node
 EXPOSE 3000
-
-# Set hostname for Next.js
-ENV HOSTNAME="0.0.0.0"
-
-# Start the application
-CMD ["pnpm", "run", "start"]
+CMD ["node", "server.js"]
