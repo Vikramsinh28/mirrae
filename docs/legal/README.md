@@ -7,7 +7,7 @@
 1. **Legal entity, address and contact emails** (privacy, support, security). The site has no contact email in `siteConfig` today.
 2. **Governing law and courts.** Country and city; arbitration yes or no.
 3. **Credits:** do they expire? Refund policy? Are prices tax-inclusive? (Code: credits do not expire; nothing handles refunds.)
-4. **Retention of try-on records.** The code never deletes `TryOnJob` rows (they hold status, times, consent time, image keys that point at already-deleted files, no photos). Decide how long to keep them and add a cleanup, or say "kept for accounting".
+4. **Retention of try-on records.** They hold status, times, consent time and image keys, no photos. `scripts/purge-tryon-jobs.ts` deletes finished ones older than N days (default 180, minimum 90 because the dashboard shows 90 days of usage; dry run unless `--apply`). The privacy draft says 180 days: confirm it, and **schedule the script** (for example monthly) once there is a host, because nothing runs it by itself.
 5. **Retention of web server logs** (depends on where it is hosted, which is not chosen yet) and of conversion counts (`StorefrontEvent`; they are erased with the shop).
 6. **Minimum age** and whether to ask shoppers for age confirmation.
 7. **Who is the controller for shopper photos**: the draft says the store offers the try-on and Mirrae acts as its service provider. If you serve EU/UK shoppers you may need a data processing agreement with merchants.

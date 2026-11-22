@@ -79,6 +79,7 @@ Invariants — do not break these:
 - **Back views are invented** when the product photo shows only the front; the landing FAQ says so. Never claim they are exact.
 - **Consent required:** `TryOnJob.consentAt` is NOT NULL; `create` requires `consent: true` (exactly true). No job without consent.
 - **Privacy:** the shopper photo is deleted in a `finally` (so also on failure) right after the front view, before the slow extra views start (they only need the front result). An S3 lifecycle rule expires the `tryon/` prefix after 24h (applied; see "Storage (AWS S3)").
+- **Record retention:** finished try-on records (`TryOnJob`, no photos) are kept 180 days by default; `npx tsx --env-file=.env scripts/purge-tryon-jobs.ts [--days n] [--apply]` deletes older DONE/FAILED ones (dry run unless `--apply`, minimum 90 days since the dashboard shows 90 days). Nothing schedules it yet: add a monthly run once there is a host. Dev DB dry run verified (0 old records, so a real delete was not exercised).
 - **Stale handling:** jobs stuck in PROCESSING or QUEUED beyond the threshold are failed, never charged. `markJobDone` only moves PROCESSING→DONE.
 - Presigned GET URLs to the provider last 3600s (≫ 75s budget).
 - Known trade-off: a hard crash between "mark DONE" and "charge" loses one credit of revenue. Accepted; comment is in the code.
