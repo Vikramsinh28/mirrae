@@ -66,7 +66,7 @@ Uninstalling the Shopify app switches your shop off at once. Shopify then asks u
 
 We use these providers to run the service. They may process data only to provide their service to us:
 
-- **Google Cloud (Vertex AI and Gemini):** receives photos and product images to check them and to make the results. [Confirm Google's current terms on not using this data to train models, and the processing regions: the try-on model runs in us-central1 and the image-editing model in the "global" location.]
+- **Google Cloud (Vertex AI and Gemini):** receives photos and product images to check them and to make the results. Google states in its [data governance documentation](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/data-governance) that it does not use customer data to train or fine-tune its models without the customer's permission, and that prompts may be logged for abuse monitoring under its cloud terms. The try-on model runs in us-central1; the image-editing model uses Google's "global" location, where requests can be served from any region. [Lawyer: confirm this wording against the terms that apply to our account.]
 - **Amazon Web Services (S3, Mumbai region):** short-lived storage of photos and result images.
 - **Stripe:** payments for web accounts.
 - **Shopify:** installation, sign-in inside the Shopify admin, and billing for Shopify stores.
