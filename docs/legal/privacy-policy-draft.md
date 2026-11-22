@@ -29,7 +29,7 @@ Questions or requests: [privacy contact email].
 | A random session number (not your name, email or account) | To keep one try-on together and apply limits | About two hours |
 | Counts of what happened in a session: opened the button, saw a result, added to cart, shared | To show the store how the button performs, with no photo and no identity | [retention, e.g. kept with the store's usage records] |
 | Your internet (IP) address | Held briefly in memory to stop bots and abuse; ordinary server logs may also contain it | [log retention, depends on hosting] |
-| A record of the try-on (time, status, which store and product image, that you gave consent). It contains no photo | Billing the store, support, fixing errors | [retention; the code does not delete these records today] |
+| A record of the try-on (time, status, which store and product image, that you gave consent). It contains no photo | Billing the store, support, fixing errors | About 180 days, then deleted [confirm; needs the purge script scheduled] |
 
 We do **not** ask for your name or email, we do **not** set cookies or use browser storage in the button, and we do **not** use your photo for advertising, to train AI models, or to identify who you are. We do not sell personal information.
 

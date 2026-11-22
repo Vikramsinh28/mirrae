@@ -119,3 +119,14 @@ export const failStaleJob = async (id: string, staleBefore: Date, error: string)
   });
   return count === 1;
 };
+
+// Retention: only jobs that are over (DONE or FAILED). A job still queued or processing is never touched.
+const FINISHED = ['DONE', 'FAILED'] as const;
+
+export const countFinishedTryOnJobsBefore = (cutoff: Date) =>
+  prisma.tryOnJob.count({ where: { status: { in: [...FINISHED] }, createdAt: { lt: cutoff } } });
+
+export const deleteFinishedTryOnJobsBefore = async (cutoff: Date): Promise<number> => {
+  const { count } = await prisma.tryOnJob.deleteMany({ where: { status: { in: [...FINISHED] }, createdAt: { lt: cutoff } } });
+  return count;
+};
