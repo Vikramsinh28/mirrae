@@ -323,9 +323,10 @@ describe('TryOnService.processJob', () => {
 
       expect(r.markJobDone).toHaveBeenCalledWith('job-1', 'tryon/result/x.png', false);
       expect(generateExtraView).toHaveBeenCalledWith(
-        expect.objectContaining({ view: 'side', frontImage, garmentBase64: 'PREPARED', garmentContentType: 'image/jpeg' })
+        expect.objectContaining({ view: 'side', frontImage, garmentBase64: 'PREPARED', garmentContentType: 'image/jpeg' }),
+        expect.anything()
       );
-      expect(generateExtraView).toHaveBeenCalledWith(expect.objectContaining({ view: 'back', frontImage }));
+      expect(generateExtraView).toHaveBeenCalledWith(expect.objectContaining({ view: 'back', frontImage }), expect.anything());
       expect(r.saveExtraView).toHaveBeenCalledWith('job-1', 'side', 'tryon/result/x.png');
       expect(r.saveExtraView).toHaveBeenCalledWith('job-1', 'back', 'tryon/result/x.png');
       expect(r.settleExtras).toHaveBeenCalledWith('job-1');
@@ -361,6 +362,57 @@ describe('TryOnService.processJob', () => {
       expect(r.saveExtraView).toHaveBeenCalledWith('job-1', 'side', expect.any(String));
       expect(credit.deductCredits).toHaveBeenCalledWith(expect.objectContaining({ amount: 1 }));
       expect(r.markJobFailed).not.toHaveBeenCalled();
+    });
+
+    describe('timing logs (one JSON line per step, to tell a slow model from a rate limit)', () => {
+      let info: jest.SpyInstance;
+      beforeEach(() => {
+        info = jest.spyOn(console, 'info').mockImplementation(() => undefined);
+      });
+      const logged = () => info.mock.calls.map(([line]) => JSON.parse(String(line)));
+
+      test('logs how long the front view took, with the job id', async () => {
+        await TryOnService.processJob('job-1');
+
+        expect(logged()).toContainEqual({ event: 'tryon_front_view', jobId: 'job-1', durationMs: expect.any(Number) });
+      });
+
+      test('logs each extra view with its attempts and how many were rate limited', async () => {
+        (generateExtraView as jest.Mock).mockImplementation(async ({ view }: { view: string }, options: { onAttempt: (a: unknown) => void }) => {
+          if (view === 'side') {
+            options.onAttempt({ attempt: 1, outcome: 'rate_limited', status: 429, durationMs: 40 });
+            options.onAttempt({ attempt: 2, outcome: 'ok', durationMs: 12_000 });
+          } else {
+            options.onAttempt({ attempt: 1, outcome: 'ok', durationMs: 9_000 });
+          }
+          return { bytes: new Uint8Array([9]), contentType: 'image/png' };
+        });
+
+        await TryOnService.processJob('job-1');
+
+        expect(logged()).toContainEqual({
+          event: 'tryon_extra_view', jobId: 'job-1', view: 'side', delivered: true,
+          attempts: 2, rateLimited: 1, lastAttemptMs: 12_000, totalMs: expect.any(Number),
+        });
+        expect(logged()).toContainEqual({
+          event: 'tryon_extra_view', jobId: 'job-1', view: 'back', delivered: true,
+          attempts: 1, rateLimited: 0, lastAttemptMs: 9_000, totalMs: expect.any(Number),
+        });
+      });
+
+      test('logs a view that failed as not delivered, with the last provider status', async () => {
+        (generateExtraView as jest.Mock).mockImplementation(async (_input: unknown, options: { onAttempt: (a: unknown) => void }) => {
+          options.onAttempt({ attempt: 1, outcome: 'error', status: 503, durationMs: 700 });
+          throw new Error('down');
+        });
+        jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        await TryOnService.processJob('job-1');
+
+        expect(logged()).toContainEqual(
+          expect.objectContaining({ event: 'tryon_extra_view', view: 'side', delivered: false, attempts: 1, lastStatus: 503 })
+        );
+      });
     });
 
     test('still delivers and charges 1 credit when both extra views fail', async () => {

@@ -6,7 +6,7 @@ import {
 } from '@/services/external/aws/s3';
 import { runTryOn, type TryOnImage } from '@/services/external/tryon';
 import { findPhotoProblem, type PhotoProblem } from '@/services/external/tryon-check';
-import { generateExtraView, type ExtraView } from '@/services/external/tryon-views';
+import { generateExtraView, type ExtraView, type ExtraViewAttempt } from '@/services/external/tryon-views';
 import { CREDITS_FULL_SET, CREDITS_SINGLE_VIEW, creditsForViewCount, VIEW_COUNT } from '@/lib/constants/tryon';
 import { getBucketName } from '@/services/internal/files/file-upload/file-upload-config';
 import * as repo from '@/services/repositories/tryon-job';
@@ -158,7 +158,9 @@ async function generateFrontView(job: ProcessableJob): Promise<FrontViewResult |
     });
     if (problem) throw new PhotoRejectedError(problem);
 
+    const frontStartedAt = Date.now();
     const { image } = await runTryOn({ personImageBase64: person.base64, productImageBase64: garment.base64 });
+    logTiming('tryon_front_view', { jobId: job.id, durationMs: Date.now() - frontStartedAt });
     assertValidResultImage(image);
     const { key } = await putObject('TryOnResult', 'u', job.userId, image.contentType, image.bytes);
 
@@ -182,22 +184,56 @@ async function generateFrontView(job: ProcessableJob): Promise<FrontViewResult |
   }
 }
 
+/** One JSON line per step in the server log (search for the event name), to tell a slow model from a rate limit. */
+function logTiming(event: string, fields: Record<string, unknown>): void {
+  console.info(JSON.stringify({ event, ...fields }));
+}
+
+function logExtraViewTiming(
+  jobId: string,
+  view: ExtraView,
+  delivered: boolean,
+  totalMs: number,
+  attempts: readonly ExtraViewAttempt[]
+): void {
+  const last = attempts.at(-1);
+  logTiming('tryon_extra_view', {
+    jobId,
+    view,
+    delivered,
+    attempts: attempts.length,
+    rateLimited: attempts.filter(attempt => attempt.outcome === 'rate_limited').length,
+    ...(last ? { lastAttemptMs: last.durationMs } : {}),
+    ...(last?.status === undefined ? {} : { lastStatus: last.status }),
+    totalMs,
+  });
+}
+
 /** Best effort: one extra view failing never fails the job. Returns whether the view was delivered. */
 async function generateOneExtraView(job: ProcessableJob, view: ExtraView, front: FrontViewResult): Promise<boolean> {
+  const startedAt = Date.now();
+  const attempts: ExtraViewAttempt[] = [];
+  let delivered = false;
   try {
-    const extra = await generateExtraView({
-      view,
-      frontImage: front.image,
-      garmentBase64: front.garment.base64,
-      garmentContentType: front.garment.contentType,
-    });
+    const extra = await generateExtraView(
+      {
+        view,
+        frontImage: front.image,
+        garmentBase64: front.garment.base64,
+        garmentContentType: front.garment.contentType,
+      },
+      { onAttempt: attempt => void attempts.push(attempt) }
+    );
     assertValidResultImage(extra);
     const { key } = await putObject('TryOnResult', 'u', job.userId, extra.contentType, extra.bytes);
     await repo.saveExtraView(job.id, view, key);
+    delivered = true;
     return true;
   } catch (error) {
     console.error('Try-on extra view failed', { jobId: job.id, view, error });
     return false;
+  } finally {
+    logExtraViewTiming(job.id, view, delivered, Date.now() - startedAt, attempts);
   }
 }
 

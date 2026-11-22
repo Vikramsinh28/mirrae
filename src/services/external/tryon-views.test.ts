@@ -126,6 +126,61 @@ describe('generateExtraView (Gemini image editing)', () => {
     });
   });
 
+  describe('reports every attempt so slow or rate-limited views can be diagnosed', () => {
+    const rateLimited = () => json({ error: { message: 'quota details' } }, 429);
+
+    test('reports one successful attempt with its duration', async () => {
+      const attempts: unknown[] = [];
+      fetchSpy.mockResolvedValue(withImage());
+
+      await generateExtraView({ ...input, view: 'side' }, { onAttempt: attempt => void attempts.push(attempt) });
+
+      expect(attempts).toEqual([{ attempt: 1, outcome: 'ok', durationMs: expect.any(Number) }]);
+    });
+
+    test('reports each rate-limited attempt, then the one that got through', async () => {
+      const attempts: unknown[] = [];
+      fetchSpy.mockResolvedValueOnce(rateLimited()).mockResolvedValueOnce(rateLimited()).mockResolvedValueOnce(withImage());
+
+      await generateExtraView(
+        { ...input, view: 'back' },
+        { retryDelaysMs: [1, 1], sleep: async () => undefined, onAttempt: attempt => void attempts.push(attempt) }
+      );
+
+      expect(attempts).toEqual([
+        { attempt: 1, outcome: 'rate_limited', status: 429, durationMs: expect.any(Number) },
+        { attempt: 2, outcome: 'rate_limited', status: 429, durationMs: expect.any(Number) },
+        { attempt: 3, outcome: 'ok', durationMs: expect.any(Number) },
+      ]);
+    });
+
+    test('reports another provider error with its status and does not retry it', async () => {
+      const attempts: unknown[] = [];
+      fetchSpy.mockResolvedValue(json({ error: {} }, 503));
+
+      await expect(
+        generateExtraView({ ...input, view: 'side' }, { retryDelaysMs: [1], sleep: async () => undefined, onAttempt: attempt => void attempts.push(attempt) })
+      ).rejects.toMatchObject({ status: 503 });
+
+      expect(attempts).toEqual([{ attempt: 1, outcome: 'error', status: 503, durationMs: expect.any(Number) }]);
+    });
+
+    test('a failing observer never breaks the view', async () => {
+      fetchSpy.mockResolvedValue(withImage());
+
+      const result = await generateExtraView(
+        { ...input, view: 'side' },
+        {
+          onAttempt: () => {
+            throw new Error('logger down');
+          },
+        }
+      );
+
+      expect(Array.from(result.bytes)).toEqual([5, 6, 7]);
+    });
+  });
+
   test('maps a timeout to a timeout error', async () => {
     fetchSpy.mockRejectedValue(Object.assign(new Error('aborted'), { name: 'TimeoutError' }));
     await expect(generateExtraView({ ...input, view: 'back' })).rejects.toThrow(/timed out/i);
