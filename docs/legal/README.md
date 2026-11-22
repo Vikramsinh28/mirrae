@@ -21,7 +21,7 @@
 | Shopper photo deleted right after the front view, also on failure | `deleteShopperPhoto` in a `finally`, `src/services/internal/tryon.ts` | still true after any change |
 | Results and leftover photos expire within about two days | S3 lifecycle rule on `tryon/` (`infra/storage/tryon-lifecycle.json`); S3 rounds up | rule still applied; real bucket |
 | No cookies or browser storage in the widget | grep of `src/widget` found none | widget changes |
-| Photos go to Google (check + try-on + extra views); regions us-central1 and `global` | `tryon.ts`, `tryon-check.ts`, `tryon-views.ts` | **Google's current terms on not training on this data, and the regions** |
+| Photos go to Google (check + try-on + extra views); regions us-central1 and `global` | `tryon.ts`, `tryon-check.ts`, `tryon-views.ts` | Google's [data governance page](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/data-governance) (read 2026-11-22) says no training on customer data without permission, possible prompt logging for abuse monitoring, and that the `global` endpoint can serve from any region. Re-read it before publishing and check it against the terms on our account |
 | Anonymous session id valid about 2h; counts only | storefront token, `StorefrontEvent` | token lifetime |
 | IP used for in-memory rate limits | `src/lib/storefront/limits.ts` | what the host logs |
 | We store no Shopify token; no scopes; store contact email stored | `src/services/internal/shopify.ts` | any new scope |
