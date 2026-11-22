@@ -14,6 +14,7 @@ Mirrae is a **long-running Node process** (`npm run build`, then `npm start`), n
   ```
 
   Migrations run from a separate target as a one-off job with `POSTGRES_URL` set: `docker build -f infra/Dockerfile --target migrate -t mirrae-migrate ...`, then run that image (its command is `pnpm run migrate:prod`). All migrations were applied from scratch to an empty database with it.
+- **Chosen (2026-11-22): Google Cloud Run in `asia-southeast1` (Singapore) with Cloud SQL, domain `mirrae.org`.** The step-by-step commands are in `docs/deploy-cloud-run.md`.
 - Give it a real **https domain**, for example `app.<your domain>`.
 
 ## 2. Database
