@@ -51,7 +51,8 @@ Never commit these. Put them in the host's secret store.
 
 ## 6. Before real money
 
-- Confirm the real try-on cost on the GCP billing page and Shopify's revenue share in the Partner Dashboard (prices in `src/lib/shopify/billing.ts` rest on estimates).
+- Confirm Shopify's revenue share in the Partner Dashboard (the prices in `src/lib/shopify/billing.ts` assume 15% above the first $1M; Shopify's docs and one snippet disagreed). The try-on cost itself is confirmed from the GCP SKU price list (about $0.06 per front view, $0.039 per extra view, about $0.069 per credit for 3-view jobs).
+- **Google account deadlines** (shown in the Cloud console on 2026-11-22): turn on 2-step verification by **2026-11-28** to keep console access, and complete the account identity verification by **2027-03-14** (otherwise the account may be suspended or terminated). The try-on runs on this account.
 - Legal drafts reviewed, blanks filled and published at `/privacy-policy` and `/terms-of-services` (`docs/legal/`).
 - Then set `SHOPIFY_BILLING_LIVE=true`.
 

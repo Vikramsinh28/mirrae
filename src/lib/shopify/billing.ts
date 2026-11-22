@@ -9,10 +9,11 @@ export interface CreditPack {
   priceUsd: number;
 }
 
-// Prices set 2026-11-22 from an estimated cost of about $0.076 per credit (Vertex ~$0.06 per front view, Gemini
-// ~$0.039 per extra view, plus 10% for retries and failures; both figures are third-party and still to be confirmed
-// on the GCP billing page). That leaves about 43% / 40% / 34% after Shopify's 15% revenue share (0% on the first $1M
-// lifetime, per Shopify's docs). Re-check before billing goes live. Ordered smallest to largest.
+// Prices set 2026-11-22 from a cost of about $0.076 per credit: Vertex try-on ~$0.06 per front view and Gemini image
+// ~$0.039 per extra view (both read from the billing account's own SKU price list on 2026-11-22: ₹5.7138 per image
+// and ₹2,856.9 per 1M image tokens at 1290 tokens per image, about ₹95.2 per dollar), plus 10% for retries and
+// failures. That leaves about 43% / 40% / 34% after Shopify's 15% revenue share (0% on the first $1M lifetime, per
+// Shopify's docs; check the Partner Dashboard terms). Ordered smallest to largest.
 export const CREDIT_PACKS: readonly CreditPack[] = [
   { id: 'pack_50', credits: 50, priceUsd: 9 },
   { id: 'pack_200', credits: 200, priceUsd: 34 },
