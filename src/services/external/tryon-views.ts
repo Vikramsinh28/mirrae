@@ -61,11 +61,23 @@ const RATE_LIMITED_STATUS = 429;
 const DEFAULT_RETRY_DELAYS_MS = [4_000, 8_000];
 const defaultSleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
+/** One request to the model, reported after it finishes so slow or rate-limited views can be diagnosed. */
+export interface ExtraViewAttempt {
+  /** 1 for the first request, 2 for the first retry, and so on. */
+  attempt: number;
+  outcome: 'ok' | 'rate_limited' | 'error';
+  /** HTTP status of the provider answer, when there was one. */
+  status?: number;
+  durationMs: number;
+}
+
 export interface ExtraViewOptions {
   timeoutMs?: number;
   /** Waits before each retry after a 429; empty means never retry. */
   retryDelaysMs?: readonly number[];
   sleep?: (ms: number) => Promise<void>;
+  /** Called after every attempt. An observer that throws never affects the view. */
+  onAttempt?: (attempt: ExtraViewAttempt) => void;
 }
 
 async function requestExtraView(
@@ -99,16 +111,39 @@ async function requestExtraView(
   return { bytes: new Uint8Array(Buffer.from(image.data, 'base64')), contentType: image.mimeType };
 }
 
+function report(onAttempt: ExtraViewOptions['onAttempt'], attempt: ExtraViewAttempt): void {
+  try {
+    onAttempt?.(attempt);
+  } catch {
+    // Diagnostics must never break a view.
+  }
+}
+
 export async function generateExtraView(
   input: ExtraViewInput,
-  { timeoutMs = DEFAULT_TIMEOUT_MS, retryDelaysMs = DEFAULT_RETRY_DELAYS_MS, sleep = defaultSleep }: ExtraViewOptions = {}
+  {
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    retryDelaysMs = DEFAULT_RETRY_DELAYS_MS,
+    sleep = defaultSleep,
+    onAttempt,
+  }: ExtraViewOptions = {}
 ): Promise<TryOnImage> {
-  for (let attempt = 0; ; attempt++) {
+  for (let attempt = 1; ; attempt++) {
+    const startedAt = Date.now();
     try {
-      return await requestExtraView(input, timeoutMs);
+      const image = await requestExtraView(input, timeoutMs);
+      report(onAttempt, { attempt, outcome: 'ok', durationMs: Date.now() - startedAt });
+      return image;
     } catch (error) {
-      const delay = retryDelaysMs.at(attempt);
-      const rateLimited = error instanceof TryOnProviderError && error.status === RATE_LIMITED_STATUS;
+      const status = error instanceof TryOnProviderError ? error.status : undefined;
+      const rateLimited = status === RATE_LIMITED_STATUS;
+      report(onAttempt, {
+        attempt,
+        outcome: rateLimited ? 'rate_limited' : 'error',
+        ...(status === undefined ? {} : { status }),
+        durationMs: Date.now() - startedAt,
+      });
+      const delay = retryDelaysMs.at(attempt - 1);
       if (!rateLimited || delay === undefined) throw error;
       await sleep(delay);
     }
