@@ -13,6 +13,11 @@ import { PHOTO_PROBLEM_MESSAGES, TryOnService } from './tryon';
 import { PHOTO_PROBLEM_CODES } from '@/lib/constants/tryon';
 import { prepareTryOnImage } from './tryon-image';
 
+// Real constants, except a short stagger so the 3-view tests do not wait seconds.
+jest.mock('@/lib/constants/tryon', () => ({
+  ...jest.requireActual('@/lib/constants/tryon'),
+  EXTRA_VIEW_STAGGER_MS: 40,
+}));
 jest.mock('@/services/internal/credit');
 jest.mock('@/services/external/aws/s3');
 jest.mock('@/services/external/tryon', () => ({
@@ -332,6 +337,18 @@ describe('TryOnService.processJob', () => {
       expect(r.settleExtras).toHaveBeenCalledWith('job-1');
       expect(credit.deductCredits).toHaveBeenCalledTimes(1);
       expect(credit.deductCredits).toHaveBeenCalledWith(expect.objectContaining({ amount: 2, objectId: 'job-1' }));
+    });
+
+    test('starts the back view a little after the side view, not in the same instant', async () => {
+      const startedAt: Record<string, number> = {};
+      (generateExtraView as jest.Mock).mockImplementation(async (input: { view: string }) => {
+        startedAt[input.view] = Date.now();
+        return frontImage;
+      });
+
+      await TryOnService.processJob('job-1');
+
+      expect(startedAt.back - startedAt.side).toBeGreaterThanOrEqual(30);
     });
 
     test('deletes the shopper photo before the slow extra views start', async () => {

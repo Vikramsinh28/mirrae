@@ -19,3 +19,10 @@ export const RESERVATION_WINDOW_MS = 10 * 60 * 1000;
 
 /** Why a try-on can be refused because of the photos; stored in TryOnJob.error and shown to merchants as a count. */
 export const PHOTO_PROBLEM_CODES = ['NO_PERSON', 'MULTIPLE_PEOPLE', 'PERSON_TOO_SMALL', 'NOT_CLOTHING'] as const;
+
+/**
+ * The side and back views are requested a little apart, not in the same instant: the image model's quota is
+ * low, and two simultaneous calls were the ones that hit HTTP 429 together (measured 2026-11-24: 4 of 8 extra
+ * views were rate limited, one failed outright). The wait is small compared with the ~10s a view takes.
+ */
+export const EXTRA_VIEW_STAGGER_MS = 3000;
