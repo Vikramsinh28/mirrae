@@ -7,7 +7,13 @@ import {
 import { runTryOn, type TryOnImage } from '@/services/external/tryon';
 import { findPhotoProblem, type PhotoProblem } from '@/services/external/tryon-check';
 import { generateExtraView, type ExtraView, type ExtraViewAttempt } from '@/services/external/tryon-views';
-import { CREDITS_FULL_SET, CREDITS_SINGLE_VIEW, creditsForViewCount, VIEW_COUNT } from '@/lib/constants/tryon';
+import {
+  CREDITS_FULL_SET,
+  CREDITS_SINGLE_VIEW,
+  creditsForViewCount,
+  EXTRA_VIEW_STAGGER_MS,
+  VIEW_COUNT,
+} from '@/lib/constants/tryon';
 import { getBucketName } from '@/services/internal/files/file-upload/file-upload-config';
 import * as repo from '@/services/repositories/tryon-job';
 import { CreditService } from './credit';
@@ -209,6 +215,8 @@ function logExtraViewTiming(
   });
 }
 
+const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+
 /** Best effort: one extra view failing never fails the job. Returns whether the view was delivered. */
 async function generateOneExtraView(job: ProcessableJob, view: ExtraView, front: FrontViewResult): Promise<boolean> {
   const startedAt = Date.now();
@@ -238,7 +246,12 @@ async function generateOneExtraView(job: ProcessableJob, view: ExtraView, front:
 }
 
 async function generateExtraViews(job: ProcessableJob, front: FrontViewResult): Promise<number> {
-  const results = await Promise.all(EXTRA_VIEWS.map(view => generateOneExtraView(job, view, front)));
+  const results = await Promise.all(
+    EXTRA_VIEWS.map(async (view, index) => {
+      if (index > 0) await sleep(index * EXTRA_VIEW_STAGGER_MS);
+      return generateOneExtraView(job, view, front);
+    })
+  );
   try {
     await repo.settleExtras(job.id);
   } catch (error) {
